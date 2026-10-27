@@ -10,7 +10,7 @@ and decision D-0166. Glossary in [CONTEXT.md](CONTEXT.md). Session handoff in
 
 Non-negotiable constraints:
 
-- This directory is never pushed to the public `clear-*` repos. There is no git remote.
+- The code lives in the private repo `CLEAR-Initiative/clear-grouping-lab`, never in the public `clear-*` repos. Fetched data, layers, judgments and `.env` are gitignored and never pushed.
 - It runs read-only against the dev GraphQL API with keys in a local `.env` that is gitignored and never printed.
 - Nothing has to be merged into any repo to run it. Fetched data, layers and judgments stay in this directory.
 

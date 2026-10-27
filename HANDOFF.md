@@ -1,6 +1,6 @@
 # clear-grouping-lab — handoff from the 27 Oct 2026 session
 
-Private, local-only lab for testing how CLEAR groups signals into events. Never push to the public clear-* repos. No remote yet.
+Private lab for testing how CLEAR groups signals into events. Code is in the private repo CLEAR-Initiative/clear-grouping-lab (added 27 Oct); never push to the public clear-* repos, and never commit data/, layers/, judgments/ or .env.
 
 ## Why this exists (one paragraph)
 

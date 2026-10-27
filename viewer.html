@@ -3,301 +3,549 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Grouping lab viewer</title>
+<title>Grouping Lab Viewer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-  :root { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#ddd; --card:#fafafa; --accent:#1f5fbf; --warn:#b35c00; --drop:#eee; --sel:#e8f0fe; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#141414; --fg:#eee; --muted:#aaa; --line:#333; --card:#1d1d1d; --accent:#7aa7ff; --warn:#f0a050; --drop:#222; --sel:#1e2a44; }
-  }
-  * { box-sizing: border-box; }
-  body { margin:0; font: 14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:8px 16px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
-  header label { color:var(--muted); }
-  header select, header input, header button { font:inherit; padding:4px 8px; }
-  button { cursor:pointer; }
-  main { padding: 12px 16px 80px; max-width: 1100px; margin: 0 auto; }
-  .stats { color:var(--muted); margin: 4px 0 12px; }
-  .card { border:1px solid var(--line); border-radius:8px; background:var(--card); margin: 0 0 12px; padding: 10px 12px; }
-  .card.selected { background:var(--sel); border-color:var(--accent); }
-  .card.dropped { background:var(--drop); opacity:.85; }
-  .card.judged { border-left: 4px solid var(--accent); }
-  .card h3 { margin:0; font-size:15px; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
-  .card h3 .meta { color:var(--muted); font-weight:normal; font-size:13px; }
-  .card .actions { float:right; display:flex; gap:6px; }
-  .sig { border-top:1px dashed var(--line); padding:8px 0 4px; display:grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
-  .sig .who { color:var(--muted); font-size:12px; }
-  .sig .text { white-space:pre-wrap; word-break:break-word; }
-  .sig .text[dir=auto] { unicode-bidi: plaintext; }
-  .sig .jev { font-size:12px; color:var(--muted); grid-column: 1 / -1; }
-  .sig .jev b { color:var(--fg); }
-  .sig button { font-size:12px; }
-  .pill { display:inline-block; padding:0 6px; border-radius:10px; border:1px solid var(--line); font-size:12px; color:var(--muted); }
-  .pill.sev4 { border-color:var(--warn); color:var(--warn); }
-  .tray { position:fixed; bottom:0; left:0; right:0; background:var(--bg); border-top:1px solid var(--line); padding:8px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; z-index:5; }
-  .tray .count { color:var(--muted); }
-  details.cands { grid-column: 1 / -1; font-size:12px; }
-  details.cands li { color:var(--muted); }
-  .empty { color:var(--muted); padding: 40px 0; text-align:center; }
-  a { color:var(--accent); }
+/* Layout: setup row + stat tiles, sticky tab bar with progress, then one panel per tab.
+   Tokens and components follow seed/prototype-review-page.html. */
+:root{
+  --bg:#f6f5f1; --surface:#ffffff; --fg:#1d2126; --muted:#5d6672; --line:#d9d6cd;
+  --accent:#0f6b63; --accent-fg:#ffffff; --warn:#b8641a; --bad:#a83232; --good:#2d7a3a;
+  --chip:#ebe9e2; --selbg:#e3f1ef; --outbg:#fbecec; --dropbg:#efeee9;
+  --font-body:"Public Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15181c;--surface:#1e2227;--fg:#e7e6e1;--muted:#9aa3ad;--line:#333941;--accent:#4fb3a8;--accent-fg:#0f1a18;--warn:#e0924a;--bad:#e06a6a;--good:#6cc27a;--chip:#2a3036;--selbg:#1d3532;--outbg:#3a2224;--dropbg:#191c20;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15181c;--surface:#1e2227;--fg:#e7e6e1;--muted:#9aa3ad;--line:#333941;--accent:#4fb3a8;--accent-fg:#0f1a18;--warn:#e0924a;--bad:#e06a6a;--good:#6cc27a;--chip:#2a3036;--selbg:#1d3532;--outbg:#3a2224;--dropbg:#191c20;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.45;margin:0}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:0 96px}
+header.top{padding-block:24px 8px;display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end}
+header.top .titles{flex:1 1 420px;min-width:0}
+h1{font-size:26px;margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
+.lede{color:var(--muted);max-width:72ch;margin:0}
+.setup{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end}
+.setup label{display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+select,input[type=text],input[type=search]{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);color:var(--fg);min-width:0}
+.tabs{position:sticky;top:0;background:var(--bg);z-index:5;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-block:10px;border-bottom:1px solid var(--line)}
+.tab{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.tab .n{font-family:var(--font-mono);font-size:11px;opacity:.8;margin-left:4px}
+.tabs input[type=search]{flex:0 1 220px;margin-left:8px}
+.progress{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+button:focus-visible,input:focus-visible,select:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.panel{padding-block:16px}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0 4px}
+.sum div{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.sum b{display:block;font-family:var(--font-mono);font-size:20px;font-variant-numeric:tabular-nums}
+.sum span{color:var(--muted);font-size:12px}
+.howto{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0 0 14px;color:var(--muted);font-size:14px}
+.howto b{color:var(--fg)}
+.bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:0 0 12px;font-size:13px;color:var(--muted)}
+.bar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin:0 0 14px;overflow:hidden}
+.card.done{border-left:4px solid var(--good)}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.card > header{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;padding:12px 14px;border-bottom:1px solid var(--line)}
+.card h2{font-size:16px;margin:0;flex:1 1 320px;min-width:0}
+.card h2 .loc{color:var(--muted);font-weight:500;font-size:14px}
+.stat{font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.group-h{font-size:13px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);padding:10px 14px;background:var(--bg);border-top:1px solid var(--line)}
+.group-h:first-child{border-top:0}
+.tblwrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+td,th{padding:7px 10px;border-top:1px solid var(--line);vertical-align:top;text-align:left}
+th{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.03em;text-transform:uppercase;border-top:0;white-space:nowrap}
+td.mono{font-family:var(--font-mono);font-size:12px;white-space:nowrap;color:var(--muted)}
+td.loc{color:var(--muted);font-size:13px;min-width:110px}
+td.ck{text-align:center;width:1%;white-space:nowrap}
+td.ck input{width:16px;height:16px;cursor:pointer}
+tr.out td{background:var(--outbg)}
+tr.out td.txt{text-decoration:line-through;text-decoration-color:var(--bad)}
+tr.sel td{background:var(--selbg)}
+tr.dropped td{background:var(--dropbg)}
+tr.dropped td.txt{color:var(--muted)}
+td.txt{min-width:280px;cursor:pointer}
+.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word;unicode-bidi:plaintext}
+tr.open .clamp{-webkit-line-clamp:unset;display:block}
+.ttl{font-weight:600;display:block;margin-bottom:2px}
+.jev{font-size:12px;color:var(--muted);margin-top:4px}
+.jev details summary{cursor:pointer}
+.jev li{margin:2px 0}
+.chip{display:inline-block;border-radius:4px;padding:1px 6px;font-family:var(--font-mono);font-size:11px;background:var(--chip);color:var(--fg);margin:0 4px 2px 0;white-space:nowrap}
+.chip.src{background:transparent;border:1px solid var(--line)}
+.chip.sev4{background:var(--warn);color:#fff}
+.chip.drop{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
+.chip.merge{background:var(--accent);color:var(--accent-fg)}
+.chip.camp{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+a{color:var(--accent)}
+.verdict{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);background:var(--bg)}
+.verdict .q{font-weight:600;font-size:13px;color:var(--muted);flex:1 1 260px}
+.verdict .ok{color:var(--good);font-weight:600;font-size:13px}
+.verdict label{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-fg);border:0;border-radius:6px;padding:7px 14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+button.ghost{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 14px;font:inherit;font-size:14px;cursor:pointer}
+button.link{background:none;border:0;padding:0;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
+button:disabled{opacity:.45;cursor:not-allowed}
+.tray{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.08);transform:translateY(110%);transition:transform .15s}
+.tray.on{transform:none}
+.tray .in{max-width:1100px;margin:0 auto;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.tray .count{font-weight:600;flex:1 1 auto}
+.jlist{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin:0 0 14px}
+.jlist h3{font-size:14px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line)}
+.jlist .row{display:flex;gap:12px;align-items:baseline;padding:8px 14px;border-top:1px solid var(--line);font-size:13.5px}
+.jlist .row:first-of-type{border-top:0}
+.jlist .row .what{flex:1;min-width:0}
+.jlist .row .what small{display:block;color:var(--muted)}
+.jlist .empty{padding:10px 14px;color:var(--muted);font-size:13px}
+.export{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}
+.msg{color:var(--good);font-size:13px}
+.empty{color:var(--muted);padding:40px 0;text-align:center}
+code{font-family:var(--font-mono);font-size:12.5px}
+@media (prefers-reduced-motion:reduce){.tray{transition:none}}
 </style>
 </head>
 <body>
-<header>
-  <label>Day <input id="day" size="22" placeholder="sudan/2026-10-20"></label>
-  <button id="load">Load</button>
-  <label>Layer <select id="layer"></select></label>
-  <label>Show <select id="filter">
-    <option value="all">all cards</option>
-    <option value="multi">multi-signal only</option>
-    <option value="sev4">severity ≥ 4 only</option>
-    <option value="dropped">dropped only</option>
-    <option value="unjudged">not yet judged</option>
-  </select></label>
-  <label>Judge <input id="judge" size="10" placeholder="your name"></label>
-  <button id="export">Export judgments</button>
-  <label>Import <input id="import" type="file" accept=".json"></label>
-  <button id="clear">Clear judgments</button>
+<div class="wrap">
+<header class="top">
+  <div class="titles">
+    <h1 id="h1">Grouping lab</h1>
+    <p class="lede">Judge how signals were grouped into events. Each card is one event as the chosen layer built it; every row is one original signal. Your judgments are about signals, so they score every layer at once. Nothing here is pre-judged by a model.</p>
+  </div>
+  <div class="setup">
+    <label>Day <select id="day"></select></label>
+    <label>Layer <select id="layer"></select></label>
+    <label>Judge <input id="judge" type="text" size="10" placeholder="your name"></label>
+  </div>
 </header>
-<main>
-  <div class="stats" id="stats">Load a day. Serve this folder with <code>python3 -m http.server 8765</code> and open <code>http://localhost:8765/viewer.html?day=sudan/2026-10-20</code>.</div>
-  <div id="cards"></div>
-</main>
-<div class="tray">
-  <span class="count" id="selcount">0 cards selected</span>
-  <button id="merge" disabled>Merge selected (same event)</button>
-  <button id="campaign" disabled>Mark selected as one campaign</button>
-  <button id="deselect">Deselect</button>
-  <span class="count" id="jcount"></span>
+<div class="sum" id="sum"></div>
+
+<nav class="tabs" role="tablist" id="tabs">
+  <button class="tab" role="tab" data-tab="multi" aria-selected="true">1 · Grouped events<span class="n" id="n-multi"></span></button>
+  <button class="tab" role="tab" data-tab="single">2 · Single signals<span class="n" id="n-single"></span></button>
+  <button class="tab" role="tab" data-tab="judg">3 · My judgments<span class="n" id="n-judg"></span></button>
+  <input type="search" id="q" placeholder="Filter by text or place">
+  <span class="progress" id="progress"></span>
+</nav>
+
+<section class="panel" id="panel-multi">
+  <div class="howto"><b>Should these be one event?</b> Each card is an event the layer built from more than one signal. Read the rows; tick <b>not this one</b> on any signal that reports a different real-world occurrence, then press <b>Yes, one event</b> for the rest. Same occurrence means the same thing happening, not the same actor or the same kind of attack; use <b>select</b> and <b>One campaign</b> for those. Click a row's text to expand it.</div>
+  <div class="bar"><label><input type="checkbox" id="hideDoneMulti"> hide cards I've answered</label></div>
+  <div id="multi"></div>
+</section>
+
+<section class="panel" id="panel-single" hidden>
+  <div class="howto"><b>Find the ones that belong together.</b> Every event the layer built from a single signal, plus every signal it dropped (grey). Rows are grouped by state so reports of the same thing sit near each other; the location is CLEAR's resolved place and is often only the state or "Sudan", so go by the place names in the text. Tick <b>select</b> on two or more rows that report the same occurrence and press <b>Same event</b> in the bar at the bottom. You can also select a grouped card on tab 1 to add these signals to it.</div>
+  <div class="bar">
+    <label>Order <select id="order"><option value="state">by state</option><option value="time">by time</option></select></label>
+    <label><input type="checkbox" id="showDropped" checked> show dropped signals</label>
+    <label><input type="checkbox" id="hideMerged"> hide signals I've already merged</label>
+  </div>
+  <div id="single"></div>
+</section>
+
+<section class="panel" id="panel-judg" hidden>
+  <div class="export">
+    <button class="primary" id="btnExport">Download judgments</button>
+    <label class="ghost" style="display:inline-flex;align-items:center;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:7px 14px;background:var(--surface);font-size:14px">Import file<input id="import" type="file" accept=".json" hidden></label>
+    <button class="ghost" id="btnClear">Clear my judgments</button>
+    <span class="msg" id="exportMsg"></span>
+  </div>
+  <div class="howto">Judgments save in this browser per day as you go. <b>Download</b> writes <code id="fname">&lt;date&gt;.&lt;judge&gt;.json</code>; move it to <code id="fdir">judgments/&lt;country&gt;/</code> and run <code>python3 score.py --country … --date … --all</code>.</div>
+  <div id="jlists"></div>
+</section>
 </div>
+
+<div class="tray" id="tray"><div class="in">
+  <span class="count" id="selcount"></span>
+  <button class="primary" id="btnSame">Same event</button>
+  <button class="ghost" id="btnCamp">One campaign</button>
+  <button class="link" id="btnDeselect">Clear selection</button>
+</div></div>
 
 <script>
 // ── State ────────────────────────────────────────────────────────────────
-let day = null;            // data/<country>/<date>.json
-let layers = {};           // algo → layer json
-let current = null;        // algo name
-let selected = new Set();  // card ids in the current layer
-let judgments = emptyJudgments();
+// Judgments are stored as the judge's own actions, so each one can be undone:
+//   cards{ "<layer>|<eventId>": { ids, title, out:[signalIds], one:bool } }  answers on grouped cards
+//     ids is the card's signals when answered; replay layers number events L1, L2… so a re-run
+//     can give the same key to different signals, and the answer must stay with the signals.
+//   merges[[signalIds]]                                             "same event" selections
+//   campaigns[{name, signalIds}]
+// The exported file adds the derived signal-level `same` and `apart` lists that score.py reads.
+let day = null, layers = {}, current = null;
+let selected = new Set();      // signal ids
+let open = new Set();          // expanded rows
+let tab = 'multi';
+let J = blank();
 
-function emptyJudgments() {
-  return { country: null, date: null, name: null, createdAt: null, same: [], apart: [], campaigns: [], notes: {} };
+function blank() { return { cards: {}, merges: [], campaigns: [], legacySame: [], legacyApart: [], notes: {} }; }
+function key() { return day ? `judgments:${day.country}:${day.date}` : null; }
+function save() { try { localStorage.setItem(key(), JSON.stringify(J)); } catch (e) {} render(); }
+function adopt(raw) {
+  const j = { ...blank(), ...raw };
+  // Files from the first viewer carry only same/apart; keep them as-is.
+  if (!raw.cards && !raw.merges) { j.legacySame = raw.same || []; j.legacyApart = raw.apart || []; }
+  delete j.same; delete j.apart;
+  return j;
 }
-function storageKey() { return day ? `judgments:${day.country}:${day.date}` : null; }
-function saveJudgments() {
-  try { localStorage.setItem(storageKey(), JSON.stringify(judgments)); } catch (e) {}
-  renderCounts();
+function restore() {
+  try { const raw = localStorage.getItem(key()); J = raw ? adopt(JSON.parse(raw)) : blank(); } catch (e) { J = blank(); }
+  try { document.getElementById('judge').value = localStorage.getItem('judge') || ''; } catch (e) {}
 }
-function loadStoredJudgments() {
-  try {
-    const raw = localStorage.getItem(storageKey());
-    if (raw) judgments = JSON.parse(raw);
-    else judgments = { ...emptyJudgments(), country: day.country, date: day.date };
-  } catch (e) { judgments = { ...emptyJudgments(), country: day.country, date: day.date }; }
+function derived() {
+  const same = [...J.legacySame, ...J.merges.map(m => [...m])], apart = [...J.legacyApart];
+  for (const [k, v] of Object.entries(J.cards)) {
+    const card = v.ids ? null : cardByKey(k);
+    const ids = v.ids || (card ? card.signals.map(s => s.id) : []), out = new Set(v.out || []), keep = ids.filter(id => !out.has(id));
+    if (v.one && keep.length > 1) same.push(keep);
+    for (const o of out) for (const id of ids) if (id !== o) apart.push([o, id]);
+  }
+  return { same, apart };
+}
+function cardByKey(k) {
+  const [algo, id] = [k.slice(0, k.indexOf('|')), k.slice(k.indexOf('|') + 1)];
+  const layer = layers[algo];
+  if (!layer) return null;
+  const ev = layer.events.find(e => e.id === id);
+  if (!ev) return null;
+  return { title: ev.title, layer: algo, signals: ev.signalIds.map(id => sigById.get(id)).filter(Boolean) };
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────
+let index = {}, sigById = new Map();
+async function boot() {
+  const r = await fetch('layers/index.json');
+  index = r.ok ? await r.json() : {};
+  const daySel = document.getElementById('day');
+  const days = Object.keys(index).sort();
+  const want = new URLSearchParams(location.search).get('day');
+  if (want && !days.includes(want)) days.push(want);
+  daySel.innerHTML = days.map(d => `<option>${esc(d)}</option>`).join('');
+  if (!days.length) { document.getElementById('multi').innerHTML = '<div class="empty">No days yet. Run <code>fetch_day.py</code> and <code>replay.py</code>, then reload.</div>'; return; }
+  daySel.value = want || days[days.length - 1];
+  await loadDay(daySel.value);
+}
 async function loadDay(spec) {
   const [country, date] = spec.split('/');
-  if (!country || !date) { alert('Day must look like sudan/2026-10-20'); return; }
-  const dayResp = await fetch(`data/${country}/${date}.json`);
-  if (!dayResp.ok) { alert(`No day file at data/${country}/${date}.json — run fetch_day.py first`); return; }
-  day = await dayResp.json();
-  const idxResp = await fetch('layers/index.json');
-  const index = idxResp.ok ? await idxResp.json() : {};
-  const names = index[`${country}/${date}`] || [];
+  const r = await fetch(`data/${country}/${date}.json`);
+  if (!r.ok) { document.getElementById('multi').innerHTML = `<div class="empty">No day file at <code>data/${esc(country)}/${esc(date)}.json</code>. Run <code>fetch_day.py</code> first.</div>`; return; }
+  day = await r.json();
+  sigById = new Map(day.signals.map(s => [s.id, s]));
   layers = {};
-  for (const name of names) {
-    const r = await fetch(`layers/${country}/${date}.${name}.json`);
-    if (r.ok) layers[name] = await r.json();
+  for (const name of index[spec] || []) {
+    const lr = await fetch(`layers/${country}/${date}.${name}.json`);
+    if (lr.ok) layers[name] = await lr.json();
   }
   const sel = document.getElementById('layer');
-  sel.innerHTML = '';
-  for (const name of Object.keys(layers)) {
-    const o = document.createElement('option'); o.value = name; o.textContent = name; sel.appendChild(o);
-  }
-  current = Object.keys(layers)[0] || null;
-  loadStoredJudgments();
-  selected.clear();
-  history.replaceState(null, '', `?day=${country}/${date}`);
+  sel.innerHTML = Object.keys(layers).map(n => `<option>${esc(n)}</option>`).join('');
+  const wantLayer = new URLSearchParams(location.search).get('layer');
+  current = layers[wantLayer] ? wantLayer : Object.keys(layers)[0] || null;
+  sel.value = current || '';
+  selected.clear(); open.clear();
+  restore();
+  syncUrl();
   render();
 }
+function syncUrl() { if (day) history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}`); }
 
-// ── Card model for the current layer ─────────────────────────────────────
-function signalsById() {
-  const m = new Map();
-  for (const s of day.signals) m.set(s.id, s);
-  return m;
+// ── Card model ───────────────────────────────────────────────────────────
+function stateOf(s) {
+  const a1 = s.admin1Id && day.locations[s.admin1Id];
+  if (a1) return a1.name;
+  return (s.location && s.location.level === 1) ? s.location.name : 'Country only (no state)';
 }
-function cardsForLayer() {
-  const byId = signalsById();
+function cards() {
   const layer = layers[current];
   if (!layer) return [];
-  const cards = [];
-  const placed = new Set();
+  const out = [], placed = new Set();
   for (const ev of layer.events) {
-    const sigs = ev.signalIds.map(id => byId.get(id)).filter(Boolean);
+    const sigs = ev.signalIds.map(id => sigById.get(id)).filter(Boolean).sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
     if (!sigs.length) continue;
-    sigs.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
     sigs.forEach(s => placed.add(s.id));
     const sev = ev.severity ?? Math.max(-1, ...sigs.map(s => s.severity ?? -1));
-    cards.push({ id: ev.id, title: ev.title || sigs[0].title || '(untitled)', location: ev.locationName || (sigs[0].location || {}).name || '?',
-                 severity: sev < 0 ? null : sev, types: ev.types || [], signals: sigs, at: sigs[0].publishedAt, dropped: false, extra: ev.memberCountAllDays });
+    out.push({ key: `${current}|${ev.id}`, title: ev.title || sigs[0].title || '(untitled)', location: ev.locationName || (sigs[0].location || {}).name || '?',
+               severity: sev < 0 ? null : sev, types: ev.types || [], signals: sigs, at: sigs[0].publishedAt, last: sigs[sigs.length - 1].publishedAt,
+               dropped: false, allDays: ev.memberCountAllDays });
   }
   for (const s of day.signals) {
     if (placed.has(s.id)) continue;
     const d = (layer.decisions || {})[s.id] || {};
-    cards.push({ id: `drop:${s.id}`, title: s.title || '(untitled)', location: (s.location || {}).name || '?', severity: s.severity ?? null,
-                 types: s.glideCode ? [s.glideCode] : [], signals: [s], at: s.publishedAt, dropped: true, outcome: d.outcome || 'not in any event' });
+    out.push({ key: null, title: s.title, location: (s.location || {}).name || '?', severity: s.severity ?? null, types: s.glideCode ? [s.glideCode] : [],
+               signals: [s], at: s.publishedAt, dropped: true, outcome: d.outcome || 'not in any event' });
   }
-  cards.sort((a, b) => a.at.localeCompare(b.at));
-  return cards;
+  return out.sort((a, b) => a.at.localeCompare(b.at));
 }
-function judgedSignals() {
-  const set = new Set();
-  for (const g of judgments.same) g.forEach(id => set.add(id));
-  for (const p of judgments.apart) p.forEach(id => set.add(id));
-  return set;
+function mergeOf() {   // signal id → merge number (1-based), for badges
+  const m = new Map();
+  J.merges.forEach((g, i) => g.forEach(id => m.set(id, i + 1)));
+  return m;
+}
+function campOf() {
+  const m = new Map();
+  J.campaigns.forEach(c => c.signalIds.forEach(id => m.set(id, c.name)));
+  return m;
+}
+function matches(s, q) {
+  if (!q) return true;
+  const hay = `${s.title || ''} ${s.text || ''} ${(s.location || {}).name || ''} ${stateOf(s)} ${s.source}`.toLowerCase();
+  return hay.includes(q);
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────
-function fmtTime(iso) { return iso ? iso.slice(11, 16) + 'Z' : '?'; }
-function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+const SRC = { 'sudan-war-x': 'X', dataminr: 'DM', acled: 'ACLED', darfur24: 'D24' };
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function hm(iso) { return iso ? iso.slice(11, 16) : '?'; }
+function md(iso) { return iso ? iso.slice(5, 10) : '?'; }
+function sevChip(v) { return v == null ? '' : `<span class="chip ${v >= 4 ? 'sev4' : ''}">sev ${v}</span>`; }
+
+function textCell(s) {
+  const text = (s.text || '').trim(), title = (s.title || '').trim();
+  const titleAdds = title && !title.endsWith('…') && !text.startsWith(title.slice(0, 40));
+  const body = text || title;
+  return `${titleAdds && text ? `<span class="ttl" dir="auto">${esc(title)}</span>` : ''}<div class="clamp" dir="auto">${esc(body)}</div>`;
+}
+function badges(s, merges, camps) {
+  return (merges.has(s.id) ? `<span class="chip merge">merge ${merges.get(s.id)}</span>` : '') +
+         (camps.has(s.id) ? `<span class="chip camp">${esc(camps.get(s.id))}</span>` : '');
+}
+function jevLine(s) {
+  const d = ((layers[current] || {}).decisions || {})[s.id];
+  if (!d || !d.outcome || d.outcome === 'dropped' && !d.candidates) return '';
+  const cands = [...(d.candidates || [])].sort((a, b) => b.p - a.p);
+  const head = `${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}${d.matchesAny != null ? ` · matches any ${d.matchesAny}` : ''}${cands[0] ? ` · top ${cands[0].p}` : ''}`;
+  if (!cands.length) return `<div class="jev">${current}: ${head}</div>`;
+  return `<div class="jev"><details><summary>${esc(current)}: ${head} · ${cands.length} candidates</summary><ul>${cands.map(c => `<li>${c.p} · ${esc(c.summary)}</li>`).join('')}</ul></details></div>`;
+}
 
 function render() {
-  const cardsEl = document.getElementById('cards');
-  if (!day || !current) { cardsEl.innerHTML = '<div class="empty">No layers for this day yet. Run fetch_day.py (clear-as-run) and replay.py.</div>'; return; }
-  const layer = layers[current];
-  const cards = cardsForLayer();
-  const filter = document.getElementById('filter').value;
-  const judged = judgedSignals();
-  const shown = cards.filter(c => {
-    if (filter === 'multi') return c.signals.length > 1;
-    if (filter === 'sev4') return (c.severity ?? 0) >= 4;
-    if (filter === 'dropped') return c.dropped;
-    if (filter === 'unjudged') return !c.signals.some(s => judged.has(s.id));
-    return true;
-  });
-  const events = cards.filter(c => !c.dropped);
-  const assigned = events.reduce((n, c) => n + c.signals.length, 0);
-  const alerts = events.filter(c => (c.severity ?? 0) >= 4).length;
-  document.getElementById('stats').innerHTML =
-    `<b>${esc(day.country)} ${esc(day.date)}</b> · layer <b>${esc(current)}</b> · ${day.signals.length} signals · ${events.length} events · ` +
-    `merge ratio ${(events.length ? assigned / events.length : 0).toFixed(2)} · ${cards.length - events.length} dropped · ${alerts} events at severity ≥ 4 · showing ${shown.length} cards` +
-    (layer.params ? ` · <span title="${esc(JSON.stringify(layer.params))}">params</span>` : '');
+  if (!day) return;
+  const all = cards(), q = document.getElementById('q').value.trim().toLowerCase();
+  const multi = all.filter(c => c.signals.length > 1), single = all.filter(c => c.signals.length === 1);
+  const events = all.filter(c => !c.dropped), assigned = events.reduce((n, c) => n + c.signals.length, 0);
+  document.getElementById('h1').textContent = `Grouping lab: ${day.country[0].toUpperCase() + day.country.slice(1)}, ${day.date}`;
+  document.getElementById('sum').innerHTML = [
+    [day.signals.length, 'signals that day'], [events.length, `events in ${current}`],
+    [(events.length ? assigned / events.length : 0).toFixed(2), 'merge ratio (baseline 1.2)'],
+    [all.length - events.length, 'signals dropped'], [events.filter(c => (c.severity ?? 0) >= 4).length, 'events at severity ≥ 4']
+  ].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
 
-  cardsEl.innerHTML = '';
-  for (const c of shown) cardsEl.appendChild(renderCard(c, layer, judged));
-  renderCounts();
+  const answered = multi.filter(c => (answerFor(c) || {}).one).length;
+  document.getElementById('n-multi').textContent = multi.length;
+  document.getElementById('n-single').textContent = single.length;
+  document.getElementById('n-judg').textContent = Object.values(J.cards).filter(v => v.one || (v.out || []).length).length + J.merges.length + J.campaigns.length;
+  document.getElementById('progress').textContent = `answered ${answered}/${multi.length} · merges ${J.merges.length} · campaigns ${J.campaigns.length}`;
+
+  const merges = mergeOf(), camps = campOf();
+  if (tab === 'multi') renderMulti(multi, q, merges, camps);
+  if (tab === 'single') renderSingle(single, q, merges, camps);
+  if (tab === 'judg') renderJudgments();
+  renderTray();
 }
 
-function renderCard(c, layer, judged) {
-  const el = document.createElement('div');
-  el.className = 'card' + (c.dropped ? ' dropped' : '') + (selected.has(c.id) ? ' selected' : '') + (c.signals.some(s => judged.has(s.id)) ? ' judged' : '');
-  const sevPill = c.severity != null ? `<span class="pill ${c.severity >= 4 ? 'sev4' : ''}">sev ${c.severity}</span>` : '';
-  const types = c.types.length ? `<span class="pill">${esc(c.types.join(','))}</span>` : '';
-  const extra = c.extra && c.extra > c.signals.length ? `<span class="meta">(${c.extra} signals across all days)</span>` : '';
-  const dropped = c.dropped ? `<span class="pill">${esc(c.outcome)}</span>` : '';
-  el.innerHTML = `
-    <div class="actions">
-      ${c.dropped ? '' : `<button data-act="confirm" title="Every signal on this card belongs to one event">Confirm card</button>`}
-      <label><input type="checkbox" data-act="select" ${selected.has(c.id) ? 'checked' : ''}> select</label>
-    </div>
-    <h3>${esc(c.title)} <span class="meta">${esc(c.location)} · ${fmtTime(c.at)} · ${c.signals.length} signal${c.signals.length === 1 ? '' : 's'}</span> ${sevPill} ${types} ${dropped} ${extra}</h3>`;
-  for (const s of c.signals) el.appendChild(renderSignal(s, c, layer));
-  el.querySelector('[data-act=select]').addEventListener('change', e => { e.target.checked ? selected.add(c.id) : selected.delete(c.id); render(); });
-  const confirm = el.querySelector('[data-act=confirm]');
-  if (confirm) confirm.addEventListener('click', () => { if (c.signals.length > 1) { judgments.same.push(c.signals.map(s => s.id)); } else { judgments.notes[c.signals[0].id] = 'confirmed alone'; } saveJudgments(); render(); });
-  return el;
+function renderMulti(list, q, merges, camps) {
+  const hideDone = document.getElementById('hideDoneMulti').checked;
+  const shown = list.filter(c => c.signals.some(s => matches(s, q)) && !(hideDone && (answerFor(c) || {}).one));
+  const el = document.getElementById('multi');
+  if (!shown.length) { el.innerHTML = `<div class="empty">${list.length ? 'Nothing left to show with these filters.' : 'This layer merged nothing on this day.'}</div>`; return; }
+  el.innerHTML = shown.map(c => {
+    const v = answerFor(c) || {}, out = new Set(v.out || []), keep = c.signals.length - out.size;
+    const allSel = c.signals.every(s => selected.has(s.id));
+    const span = md(c.at) === md(c.last) ? `${md(c.at)} ${hm(c.at)}–${hm(c.last)}` : `${md(c.at)} → ${md(c.last)}`;
+    const rows = c.signals.map(s => `
+      <tr data-sig="${s.id}" class="${out.has(s.id) ? 'out' : ''} ${open.has(s.id) ? 'open' : ''}">
+        <td class="mono">${hm(s.publishedAt)}</td>
+        <td><span class="chip src">${esc(SRC[s.source] || s.source)}</span>${s.glideCode ? `<span class="chip">${esc(s.glideCode)}</span>` : ''}${sevChip(s.severity)}</td>
+        <td class="loc">${esc((s.location || {}).name || '—')}</td>
+        <td class="txt">${textCell(s)}${badges(s, merges, camps)}${s.url && s.url.startsWith('http') ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ''}${jevLine(s)}</td>
+        <td class="ck"><input type="checkbox" data-act="out" data-card="${esc(c.key)}" data-sig="${s.id}" ${out.has(s.id) ? 'checked' : ''} aria-label="not this one"></td>
+      </tr>`).join('');
+    const verdict = v.one
+      ? `<span class="ok">✓ ${out.size ? `The other ${keep} are one event` : 'One event'}</span><button class="link" data-act="unone" data-card="${esc(c.key)}">undo</button>`
+      : `<button class="primary" data-act="one" data-card="${esc(c.key)}" ${keep < 2 ? 'disabled' : ''}>${out.size ? `Yes, the other ${keep} are one event` : 'Yes, one event'}</button>`;
+    return `<article class="card ${v.one ? 'done' : ''} ${allSel ? 'sel' : ''}">
+      <header><h2>${esc(c.title)} <span class="loc">· ${esc(c.location)}</span></h2>
+        <span class="stat">${span} · ${c.signals.length} signals${c.allDays && c.allDays > c.signals.length ? ` (${c.allDays} all days)` : ''}</span>
+        ${sevChip(c.severity)}${c.types.length ? `<span class="chip">${esc(c.types.join(','))}</span>` : ''}</header>
+      <div class="tblwrap"><table><thead><tr><th>UTC</th><th>Src / type</th><th>Location</th><th>Signal</th><th>Not this one</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="verdict"><span class="q">Should ${out.size ? 'the unticked signals' : `these ${c.signals.length} signals`} be one event?</span>${verdict}
+        <label><input type="checkbox" data-act="selcard" data-card="${esc(c.key)}" ${allSel ? 'checked' : ''}> select</label></div>
+    </article>`;
+  }).join('');
 }
 
-function renderSignal(s, card, layer) {
-  const el = document.createElement('div');
-  el.className = 'sig';
-  const d = (layer.decisions || {})[s.id];
-  let jev = '';
-  if (d && d.candidates) {
-    const top = [...d.candidates].sort((a, b) => b.p - a.p)[0];
-    jev = `<div class="jev">Jev: <b>${esc(d.outcome)}</b> · relevance ${d.relevance} · matches any ${d.matchesAny ?? '–'} · none ${d.noneP ?? '–'}` +
-          (top ? ` · top candidate ${top.p} (${esc(top.summary.slice(0, 80))})` : '') + `</div>` +
-          (d.candidates.length ? `<details class="cands"><summary>${d.candidates.length} candidates seen</summary><ul>` +
-            [...d.candidates].sort((a, b) => b.p - a.p).map(x => `<li>${x.p} · ${esc(x.eventId)} · ${esc(x.summary)}</li>`).join('') + `</ul></details>` : '');
-  } else if (d && d.outcome) {
-    jev = `<div class="jev">${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}</div>`;
+function renderSingle(list, q, merges, camps) {
+  const showDropped = document.getElementById('showDropped').checked, hideMerged = document.getElementById('hideMerged').checked;
+  const order = document.getElementById('order').value;
+  const shown = list.filter(c => (showDropped || !c.dropped) && matches(c.signals[0], q) && !(hideMerged && merges.has(c.signals[0].id)));
+  const el = document.getElementById('single');
+  if (!shown.length) { el.innerHTML = '<div class="empty">Nothing to show with these filters.</div>'; return; }
+  const groups = new Map();
+  for (const c of shown) {
+    const g = order === 'state' ? stateOf(c.signals[0]) : '';
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(c);
   }
-  const link = s.url ? ` · <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : '';
-  el.innerHTML = `
-    <div>
-      <div class="who">${fmtTime(s.publishedAt)} · ${esc(s.source || '?')} · ${esc((s.location || {}).name || 'no location')}${s.severity != null ? ' · sev ' + s.severity : ''}${s.glideCode ? ' · ' + esc(s.glideCode) : ''}${link}</div>
-      <div class="text" dir="auto">${esc(s.text || s.title || '')}</div>
-    </div>
-    <div>${card.signals.length > 1 ? `<button data-act="pull" title="This signal is not about the same event as the others on the card">Pull out</button>` : ''}</div>
-    ${jev}`;
-  const pull = el.querySelector('[data-act=pull]');
-  if (pull) pull.addEventListener('click', () => {
-    for (const other of card.signals) if (other.id !== s.id) judgments.apart.push([s.id, other.id]);
-    saveJudgments(); render();
-  });
-  return el;
+  const names = [...groups.keys()].sort((a, b) => groups.get(b).length - groups.get(a).length || a.localeCompare(b));
+  const head = '<thead><tr><th>Select</th><th>UTC</th><th>Src / type</th><th>Location</th><th>Signal</th></tr></thead>';
+  el.innerHTML = `<div class="card"><div class="tblwrap">${names.map(g => `
+    ${g ? `<div class="group-h">${esc(g)} · ${groups.get(g).length}</div>` : ''}
+    <table>${head}<tbody>${groups.get(g).map(c => {
+      const s = c.signals[0];
+      return `<tr data-sig="${s.id}" class="${selected.has(s.id) ? 'sel' : ''} ${c.dropped ? 'dropped' : ''} ${open.has(s.id) ? 'open' : ''}">
+        <td class="ck"><input type="checkbox" data-act="sel" data-sig="${s.id}" ${selected.has(s.id) ? 'checked' : ''} aria-label="select"></td>
+        <td class="mono">${hm(s.publishedAt)}</td>
+        <td><span class="chip src">${esc(SRC[s.source] || s.source)}</span>${s.glideCode ? `<span class="chip">${esc(s.glideCode)}</span>` : ''}${sevChip(c.severity)}${c.dropped ? `<span class="chip drop">${esc(c.outcome)}</span>` : ''}</td>
+        <td class="loc">${esc((s.location || {}).name || '—')}</td>
+        <td class="txt">${textCell(s)}${badges(s, merges, camps)}${s.url && s.url.startsWith('http') ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ''}${jevLine(s)}</td>
+      </tr>`; }).join('')}</tbody></table>`).join('')}</div></div>`;
 }
 
-function renderCounts() {
-  document.getElementById('selcount').textContent = `${selected.size} cards selected`;
-  document.getElementById('merge').disabled = selected.size < 2;
-  document.getElementById('campaign').disabled = selected.size < 2;
-  document.getElementById('jcount').textContent = day ? `judgments: ${judgments.same.length} same-sets, ${judgments.apart.length} apart-pairs, ${judgments.campaigns.length} campaigns` : '';
+function sigLabel(id) {
+  const s = sigById.get(id);
+  if (!s) return `<span class="stat">${esc(id)}</span>`;
+  const t = (s.text || s.title || '').replace(/\s+/g, ' ').slice(0, 110);
+  return `<span class="stat">${hm(s.publishedAt)} ${esc(SRC[s.source] || s.source)}</span> <bdi>${esc(t)}${t.length >= 110 ? '…' : ''}</bdi>`;
+}
+function renderJudgments() {
+  const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
+  document.getElementById('fname').textContent = `${day.date}.${name}.json`;
+  document.getElementById('fdir').textContent = `judgments/${day.country}/`;
+  const cardRows = Object.entries(J.cards).filter(([, v]) => v.one || (v.out || []).length).map(([k, v]) => {
+    const c = cardByKey(k), n = v.ids ? v.ids.length : c ? c.signals.length : '?', o = (v.out || []).length;
+    return `<div class="row"><div class="what"><b>${esc(v.title || (c ? c.title : k))}</b><small>${esc(k.split('|')[0])} · ${v.one ? `${n - o} of ${n} signals are one event` : 'not answered'}${o ? ` · ${o} pulled out` : ''}</small></div>
+      <button class="link" data-act="delcard" data-card="${esc(k)}">undo</button></div>`;
+  }).join('');
+  const mergeRows = J.merges.map((g, i) => `<div class="row"><div class="what"><b>Merge ${i + 1}</b> · ${g.length} signals${g.map(id => `<small>${sigLabel(id)}</small>`).join('')}</div>
+      <button class="link" data-act="delmerge" data-i="${i}">undo</button></div>`).join('');
+  const campRows = J.campaigns.map((c, i) => `<div class="row"><div class="what"><b>${esc(c.name)}</b> · ${c.signalIds.length} signals${c.signalIds.map(id => `<small>${sigLabel(id)}</small>`).join('')}</div>
+      <button class="link" data-act="delcamp" data-i="${i}">undo</button></div>`).join('');
+  const legacy = J.legacySame.length || J.legacyApart.length
+    ? `<div class="jlist"><h3>From an older file</h3><div class="row"><div class="what">${J.legacySame.length} same sets, ${J.legacyApart.length} apart pairs</div><button class="link" data-act="dellegacy">remove</button></div></div>` : '';
+  const block = (title, rows, none) => `<div class="jlist"><h3>${title}</h3>${rows || `<div class="empty" style="padding:10px 14px;text-align:left">${none}</div>`}</div>`;
+  document.getElementById('jlists').innerHTML =
+    block('Grouped cards answered', cardRows, 'None yet. Answer cards on tab 1.') +
+    block('Same-event merges', mergeRows, 'None yet. Select rows on tab 2 and press Same event.') +
+    block('Campaigns', campRows, 'None yet.') + legacy;
+}
+
+function renderTray() {
+  const n = selected.size;
+  document.getElementById('tray').classList.toggle('on', n > 0);
+  // Selection survives filter and tab changes (search one place, select, search another), so say what is off-screen.
+  const visible = new Set([...document.querySelectorAll(`#panel-${tab} tr[data-sig]`)].map(r => r.dataset.sig));
+  const hidden = [...selected].filter(id => !visible.has(id)).length;
+  document.getElementById('selcount').textContent = `${n} signal${n === 1 ? '' : 's'} selected${hidden ? ` (${hidden} not shown here)` : ''}`;
+  document.getElementById('btnSame').disabled = n < 2;
+  document.getElementById('btnCamp').disabled = n < 2;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
-function selectedSignalIds() {
-  const ids = [];
-  for (const c of cardsForLayer()) if (selected.has(c.id)) c.signals.forEach(s => ids.push(s.id));
-  return ids;
+function cardEntry(k) {
+  const c = cardByKey(k);
+  // An answer about other signals (from an earlier run of this layer) still holds; park it under its own key.
+  if (c && J.cards[k] && !answerFor({ key: k, signals: c.signals })) { J.cards[`${k}#${Date.now()}`] = J.cards[k]; delete J.cards[k]; }
+  const v = J.cards[k] || (J.cards[k] = { out: [], one: false });
+  if (c) { v.ids = c.signals.map(s => s.id); v.title = c.title; }
+  return v;
 }
-document.getElementById('merge').addEventListener('click', () => {
-  const ids = selectedSignalIds();
-  if (ids.length < 2) return;
-  judgments.same.push(ids);
-  selected.clear(); saveJudgments(); render();
+// The stored answer for a card in the current layer, or none if the layer was re-run and the key now holds other signals.
+function answerFor(c) {
+  const v = J.cards[c.key];
+  if (!v || !v.ids) return v;
+  return v.ids.length === c.signals.length && c.signals.every(s => v.ids.includes(s.id)) ? v : undefined;
+}
+document.addEventListener('change', e => {
+  const t = e.target, act = t.dataset.act;
+  if (act === 'out') {
+    const v = cardEntry(t.dataset.card), id = t.dataset.sig;
+    v.out = t.checked ? [...new Set([...v.out, id])] : v.out.filter(x => x !== id);
+    save();
+  } else if (act === 'sel') {
+    t.checked ? selected.add(t.dataset.sig) : selected.delete(t.dataset.sig);
+    render();
+  } else if (act === 'selcard') {
+    const c = cardByKey(t.dataset.card), out = new Set((J.cards[t.dataset.card] || {}).out || []);
+    for (const s of c.signals) if (!out.has(s.id)) t.checked ? selected.add(s.id) : selected.delete(s.id);
+    render();
+  }
 });
-document.getElementById('campaign').addEventListener('click', () => {
-  const ids = selectedSignalIds();
-  if (ids.length < 2) return;
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (b && b.tagName === 'BUTTON') {
+    const act = b.dataset.act;
+    if (act === 'one') { cardEntry(b.dataset.card).one = true; save(); }
+    if (act === 'unone') { cardEntry(b.dataset.card).one = false; save(); }
+    if (act === 'delcard') { delete J.cards[b.dataset.card]; save(); }
+    if (act === 'delmerge') { J.merges.splice(+b.dataset.i, 1); save(); }
+    if (act === 'delcamp') { J.campaigns.splice(+b.dataset.i, 1); save(); }
+    if (act === 'dellegacy') { J.legacySame = []; J.legacyApart = []; save(); }
+    return;
+  }
+  // Click on a signal's text toggles the full text, unless the click was on a link or inside the candidate list.
+  const cell = e.target.closest('td.txt');
+  if (cell && !e.target.closest('a, details')) {
+    const id = cell.parentElement.dataset.sig;
+    open.has(id) ? open.delete(id) : open.add(id);
+    cell.parentElement.classList.toggle('open');
+  }
+});
+document.getElementById('btnSame').addEventListener('click', () => {
+  if (selected.size < 2) return;
+  // Signals already in a merge join this one, so a merge never splits across two entries.
+  const ids = new Set(selected), keep = [];
+  for (const g of J.merges) (g.some(id => ids.has(id)) ? g.forEach(id => ids.add(id)) : keep.push(g));
+  J.merges = [...keep, [...ids]];
+  selected.clear(); save();
+});
+document.getElementById('btnCamp').addEventListener('click', () => {
+  if (selected.size < 2) return;
   const name = prompt('Campaign name (one actor, one target class, many places):');
   if (!name) return;
-  judgments.campaigns.push({ name, signalIds: ids });
-  selected.clear(); saveJudgments(); render();
+  J.campaigns.push({ name, signalIds: [...selected] });
+  selected.clear(); save();
 });
-document.getElementById('deselect').addEventListener('click', () => { selected.clear(); render(); });
-document.getElementById('export').addEventListener('click', () => {
+document.getElementById('btnDeselect').addEventListener('click', () => { selected.clear(); render(); });
+
+document.getElementById('tabs').addEventListener('click', e => {
+  const b = e.target.closest('.tab'); if (!b) return;
+  tab = b.dataset.tab;
+  for (const t of document.querySelectorAll('.tab')) t.setAttribute('aria-selected', String(t === b));
+  for (const p of document.querySelectorAll('section.panel')) p.hidden = p.id !== `panel-${tab}`;
+  render();
+});
+for (const id of ['q', 'hideDoneMulti', 'showDropped', 'hideMerged', 'order']) document.getElementById(id).addEventListener('input', render);
+document.getElementById('layer').addEventListener('change', e => { current = e.target.value; syncUrl(); render(); });
+document.getElementById('day').addEventListener('change', e => loadDay(e.target.value));
+document.getElementById('judge').addEventListener('input', e => { try { localStorage.setItem('judge', e.target.value); } catch (x) {} if (tab === 'judg') renderJudgments(); });
+
+document.getElementById('btnExport').addEventListener('click', () => {
   if (!day) return;
   const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
-  const out = { ...judgments, country: day.country, date: day.date, name, createdAt: new Date().toISOString(), layersSeen: Object.keys(layers) };
-  const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
+  const { same, apart } = derived();
+  const out = { country: day.country, date: day.date, name, createdAt: new Date().toISOString(), layersSeen: Object.keys(layers),
+                same, apart, campaigns: J.campaigns, notes: J.notes, cards: J.cards, merges: J.merges,
+                legacySame: J.legacySame, legacyApart: J.legacyApart };
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
   a.download = `${day.date}.${name}.json`;
   a.click();
-  alert(`Downloaded ${a.download}. Move it to judgments/${day.country}/ so score.py can find it.`);
+  document.getElementById('exportMsg').textContent = `Downloaded ${a.download} (${same.length} same sets, ${apart.length} apart pairs).`;
 });
 document.getElementById('import').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   const j = JSON.parse(await f.text());
-  if (day && (j.country !== day.country || j.date !== day.date)) { alert('That file is for a different day'); return; }
-  judgments = { ...emptyJudgments(), ...j };
-  if (j.name) document.getElementById('judge').value = j.name;
-  saveJudgments(); render();
+  if (day && (j.country !== day.country || j.date !== day.date)) { alert('That file is for a different day.'); return; }
+  J = adopt(j);
+  if (j.name) { document.getElementById('judge').value = j.name; try { localStorage.setItem('judge', j.name); } catch (x) {} }
+  e.target.value = '';
+  save();
 });
-document.getElementById('clear').addEventListener('click', () => {
-  if (!day || !confirm('Clear every judgment for this day in this browser? Export first if you want to keep them.')) return;
-  judgments = { ...emptyJudgments(), country: day.country, date: day.date };
-  saveJudgments(); render();
+document.getElementById('btnClear').addEventListener('click', () => {
+  if (!day || !confirm('Clear every judgment for this day in this browser? Download first if you want to keep them.')) return;
+  J = blank(); selected.clear(); save();
 });
-document.getElementById('layer').addEventListener('change', e => { current = e.target.value; selected.clear(); render(); });
-document.getElementById('filter').addEventListener('change', render);
-document.getElementById('load').addEventListener('click', () => loadDay(document.getElementById('day').value.trim()));
-document.getElementById('day').addEventListener('keydown', e => { if (e.key === 'Enter') loadDay(e.target.value.trim()); });
 
-const param = new URLSearchParams(location.search).get('day');
-if (param) { document.getElementById('day').value = param; loadDay(param); }
+boot();
 </script>
 </body>
 </html>

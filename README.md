@@ -17,7 +17,17 @@ Non-negotiable constraints:
 ## Setup
 
 Python 3.9+ and nothing else (stdlib only). Copy `.env.example` to `.env` and fill
-`CLEAR_API_URL`, `CLEAR_API_KEY` and `OPENROUTER_API_KEY` from clear-pipeline's env.
+`CLEAR_API_URL`, `CLEAR_API_KEY` and `OPENROUTER_API_KEY` from clear-pipeline's **dev** env.
+Then `python3 check_env.py` confirms the host is dev and the key is accepted, without
+printing either.
+
+## Data stays local
+
+`data/`, `layers/` and `judgments/` are gitignored; only code, docs and `seed/`
+are committed. `fetch_day.py` refuses any API host other than
+`dev-api.clearinitiative.io`, so a `.env` that points at production fails
+loudly instead of fetching. In Claude Code, `/fetch-day sudan 2026-10-21`
+runs the fetch and reports the counts (skill in `.claude/skills/fetch-day/`).
 
 ## The loop
 

@@ -22,6 +22,8 @@ Day file shape (see README):
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from datetime import timedelta
 
 from lab_common import (
@@ -30,11 +32,14 @@ from lab_common import (
     day_path,
     graphql,
     layer_path,
+    load_env,
     now_iso,
     parse_iso,
     register_layer,
     write_json,
 )
+
+DEV_HOST = "dev-api.clearinitiative.io"
 
 LOCATIONS_QUERY = """
 query LabLocations {
@@ -114,7 +119,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--country", required=True, choices=sorted(COUNTRY_IDS))
     parser.add_argument("--date", required=True, help="UTC calendar date, YYYY-MM-DD")
+    parser.add_argument("--allow-host", help="host to accept besides the dev API (normally never needed)")
     args = parser.parse_args()
+
+    load_env()
+    host = (os.environ.get("CLEAR_API_URL") or os.environ.get("CLEAR_API_BASE") or "").split("//")[-1].split("/")[0]
+    if host != DEV_HOST and host != args.allow_host:
+        sys.exit(
+            f"CLEAR_API_URL points at {host!r}; this lab only reads from {DEV_HOST}. "
+            "Fix .env (the handoff's location ids are dev ids) or pass --allow-host deliberately."
+        )
 
     country_id = COUNTRY_IDS[args.country]
     day_start = parse_iso(args.date + "T00:00:00+00:00")

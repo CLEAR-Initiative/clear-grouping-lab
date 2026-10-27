@@ -166,7 +166,9 @@ code{font-family:var(--font-mono);font-size:12.5px}
 <script>
 // ── State ────────────────────────────────────────────────────────────────
 // Judgments are stored as the judge's own actions, so each one can be undone:
-//   cards{ "<layer>|<eventId>": { out:[signalIds], one:bool } }  answers on grouped cards
+//   cards{ "<layer>|<eventId>": { ids, title, out:[signalIds], one:bool } }  answers on grouped cards
+//     ids is the card's signals when answered; replay layers number events L1, L2… so a re-run
+//     can give the same key to different signals, and the answer must stay with the signals.
 //   merges[[signalIds]]                                             "same event" selections
 //   campaigns[{name, signalIds}]
 // The exported file adds the derived signal-level `same` and `apart` lists that score.py reads.
@@ -193,9 +195,8 @@ function restore() {
 function derived() {
   const same = [...J.legacySame, ...J.merges.map(m => [...m])], apart = [...J.legacyApart];
   for (const [k, v] of Object.entries(J.cards)) {
-    const card = cardByKey(k);
-    if (!card) continue;
-    const ids = card.signals.map(s => s.id), out = new Set(v.out || []), keep = ids.filter(id => !out.has(id));
+    const card = v.ids ? null : cardByKey(k);
+    const ids = v.ids || (card ? card.signals.map(s => s.id) : []), out = new Set(v.out || []), keep = ids.filter(id => !out.has(id));
     if (v.one && keep.length > 1) same.push(keep);
     for (const o of out) for (const id of ids) if (id !== o) apart.push([o, id]);
   }
@@ -328,7 +329,7 @@ function render() {
     [all.length - events.length, 'signals dropped'], [events.filter(c => (c.severity ?? 0) >= 4).length, 'events at severity ≥ 4']
   ].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
 
-  const answered = multi.filter(c => J.cards[c.key] && J.cards[c.key].one).length;
+  const answered = multi.filter(c => (answerFor(c) || {}).one).length;
   document.getElementById('n-multi').textContent = multi.length;
   document.getElementById('n-single').textContent = single.length;
   document.getElementById('n-judg').textContent = Object.values(J.cards).filter(v => v.one || (v.out || []).length).length + J.merges.length + J.campaigns.length;
@@ -343,11 +344,11 @@ function render() {
 
 function renderMulti(list, q, merges, camps) {
   const hideDone = document.getElementById('hideDoneMulti').checked;
-  const shown = list.filter(c => c.signals.some(s => matches(s, q)) && !(hideDone && J.cards[c.key] && J.cards[c.key].one));
+  const shown = list.filter(c => c.signals.some(s => matches(s, q)) && !(hideDone && (answerFor(c) || {}).one));
   const el = document.getElementById('multi');
   if (!shown.length) { el.innerHTML = `<div class="empty">${list.length ? 'Nothing left to show with these filters.' : 'This layer merged nothing on this day.'}</div>`; return; }
   el.innerHTML = shown.map(c => {
-    const v = J.cards[c.key] || {}, out = new Set(v.out || []), keep = c.signals.length - out.size;
+    const v = answerFor(c) || {}, out = new Set(v.out || []), keep = c.signals.length - out.size;
     const allSel = c.signals.every(s => selected.has(s.id));
     const span = md(c.at) === md(c.last) ? `${md(c.at)} ${hm(c.at)}–${hm(c.last)}` : `${md(c.at)} → ${md(c.last)}`;
     const rows = c.signals.map(s => `
@@ -410,8 +411,8 @@ function renderJudgments() {
   document.getElementById('fname').textContent = `${day.date}.${name}.json`;
   document.getElementById('fdir').textContent = `judgments/${day.country}/`;
   const cardRows = Object.entries(J.cards).filter(([, v]) => v.one || (v.out || []).length).map(([k, v]) => {
-    const c = cardByKey(k), n = c ? c.signals.length : '?', o = (v.out || []).length;
-    return `<div class="row"><div class="what"><b>${esc(c ? c.title : k)}</b><small>${esc(k.split('|')[0])} · ${v.one ? `${n - o} of ${n} signals are one event` : 'not answered'}${o ? ` · ${o} pulled out` : ''}</small></div>
+    const c = cardByKey(k), n = v.ids ? v.ids.length : c ? c.signals.length : '?', o = (v.out || []).length;
+    return `<div class="row"><div class="what"><b>${esc(v.title || (c ? c.title : k))}</b><small>${esc(k.split('|')[0])} · ${v.one ? `${n - o} of ${n} signals are one event` : 'not answered'}${o ? ` · ${o} pulled out` : ''}</small></div>
       <button class="link" data-act="delcard" data-card="${esc(k)}">undo</button></div>`;
   }).join('');
   const mergeRows = J.merges.map((g, i) => `<div class="row"><div class="what"><b>Merge ${i + 1}</b> · ${g.length} signals${g.map(id => `<small>${sigLabel(id)}</small>`).join('')}</div>
@@ -439,7 +440,20 @@ function renderTray() {
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
-function cardEntry(k) { return J.cards[k] || (J.cards[k] = { out: [], one: false }); }
+function cardEntry(k) {
+  const c = cardByKey(k);
+  // An answer about other signals (from an earlier run of this layer) still holds; park it under its own key.
+  if (c && J.cards[k] && !answerFor({ key: k, signals: c.signals })) { J.cards[`${k}#${Date.now()}`] = J.cards[k]; delete J.cards[k]; }
+  const v = J.cards[k] || (J.cards[k] = { out: [], one: false });
+  if (c) { v.ids = c.signals.map(s => s.id); v.title = c.title; }
+  return v;
+}
+// The stored answer for a card in the current layer, or none if the layer was re-run and the key now holds other signals.
+function answerFor(c) {
+  const v = J.cards[c.key];
+  if (!v || !v.ids) return v;
+  return v.ids.length === c.signals.length && c.signals.every(s => v.ids.includes(s.id)) ? v : undefined;
+}
 document.addEventListener('change', e => {
   const t = e.target, act = t.dataset.act;
   if (act === 'out') {
@@ -509,7 +523,8 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
   const { same, apart } = derived();
   const out = { country: day.country, date: day.date, name, createdAt: new Date().toISOString(), layersSeen: Object.keys(layers),
-                same, apart, campaigns: J.campaigns, notes: J.notes, cards: J.cards, merges: J.merges };
+                same, apart, campaigns: J.campaigns, notes: J.notes, cards: J.cards, merges: J.merges,
+                legacySame: J.legacySame, legacyApart: J.legacyApart };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
   a.download = `${day.date}.${name}.json`;

@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grouping lab viewer</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#ddd; --card:#fafafa; --accent:#1f5fbf; --warn:#b35c00; --drop:#eee; --sel:#e8f0fe; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141414; --fg:#eee; --muted:#aaa; --line:#333; --card:#1d1d1d; --accent:#7aa7ff; --warn:#f0a050; --drop:#222; --sel:#1e2a44; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:8px 16px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
+  header label { color:var(--muted); }
+  header select, header input, header button { font:inherit; padding:4px 8px; }
+  button { cursor:pointer; }
+  main { padding: 12px 16px 80px; max-width: 1100px; margin: 0 auto; }
+  .stats { color:var(--muted); margin: 4px 0 12px; }
+  .card { border:1px solid var(--line); border-radius:8px; background:var(--card); margin: 0 0 12px; padding: 10px 12px; }
+  .card.selected { background:var(--sel); border-color:var(--accent); }
+  .card.dropped { background:var(--drop); opacity:.85; }
+  .card.judged { border-left: 4px solid var(--accent); }
+  .card h3 { margin:0; font-size:15px; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .card h3 .meta { color:var(--muted); font-weight:normal; font-size:13px; }
+  .card .actions { float:right; display:flex; gap:6px; }
+  .sig { border-top:1px dashed var(--line); padding:8px 0 4px; display:grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+  .sig .who { color:var(--muted); font-size:12px; }
+  .sig .text { white-space:pre-wrap; word-break:break-word; }
+  .sig .text[dir=auto] { unicode-bidi: plaintext; }
+  .sig .jev { font-size:12px; color:var(--muted); grid-column: 1 / -1; }
+  .sig .jev b { color:var(--fg); }
+  .sig button { font-size:12px; }
+  .pill { display:inline-block; padding:0 6px; border-radius:10px; border:1px solid var(--line); font-size:12px; color:var(--muted); }
+  .pill.sev4 { border-color:var(--warn); color:var(--warn); }
+  .tray { position:fixed; bottom:0; left:0; right:0; background:var(--bg); border-top:1px solid var(--line); padding:8px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; z-index:5; }
+  .tray .count { color:var(--muted); }
+  details.cands { grid-column: 1 / -1; font-size:12px; }
+  details.cands li { color:var(--muted); }
+  .empty { color:var(--muted); padding: 40px 0; text-align:center; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <label>Day <input id="day" size="22" placeholder="sudan/2026-10-20"></label>
+  <button id="load">Load</button>
+  <label>Layer <select id="layer"></select></label>
+  <label>Show <select id="filter">
+    <option value="all">all cards</option>
+    <option value="multi">multi-signal only</option>
+    <option value="sev4">severity ≥ 4 only</option>
+    <option value="dropped">dropped only</option>
+    <option value="unjudged">not yet judged</option>
+  </select></label>
+  <label>Judge <input id="judge" size="10" placeholder="your name"></label>
+  <button id="export">Export judgments</button>
+  <label>Import <input id="import" type="file" accept=".json"></label>
+  <button id="clear">Clear judgments</button>
+</header>
+<main>
+  <div class="stats" id="stats">Load a day. Serve this folder with <code>python3 -m http.server 8765</code> and open <code>http://localhost:8765/viewer.html?day=sudan/2026-10-20</code>.</div>
+  <div id="cards"></div>
+</main>
+<div class="tray">
+  <span class="count" id="selcount">0 cards selected</span>
+  <button id="merge" disabled>Merge selected (same event)</button>
+  <button id="campaign" disabled>Mark selected as one campaign</button>
+  <button id="deselect">Deselect</button>
+  <span class="count" id="jcount"></span>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────
+let day = null;            // data/<country>/<date>.json
+let layers = {};           // algo → layer json
+let current = null;        // algo name
+let selected = new Set();  // card ids in the current layer
+let judgments = emptyJudgments();
+
+function emptyJudgments() {
+  return { country: null, date: null, name: null, createdAt: null, same: [], apart: [], campaigns: [], notes: {} };
+}
+function storageKey() { return day ? `judgments:${day.country}:${day.date}` : null; }
+function saveJudgments() {
+  try { localStorage.setItem(storageKey(), JSON.stringify(judgments)); } catch (e) {}
+  renderCounts();
+}
+function loadStoredJudgments() {
+  try {
+    const raw = localStorage.getItem(storageKey());
+    if (raw) judgments = JSON.parse(raw);
+    else judgments = { ...emptyJudgments(), country: day.country, date: day.date };
+  } catch (e) { judgments = { ...emptyJudgments(), country: day.country, date: day.date }; }
+}
+
+// ── Loading ──────────────────────────────────────────────────────────────
+async function loadDay(spec) {
+  const [country, date] = spec.split('/');
+  if (!country || !date) { alert('Day must look like sudan/2026-10-20'); return; }
+  const dayResp = await fetch(`data/${country}/${date}.json`);
+  if (!dayResp.ok) { alert(`No day file at data/${country}/${date}.json — run fetch_day.py first`); return; }
+  day = await dayResp.json();
+  const idxResp = await fetch('layers/index.json');
+  const index = idxResp.ok ? await idxResp.json() : {};
+  const names = index[`${country}/${date}`] || [];
+  layers = {};
+  for (const name of names) {
+    const r = await fetch(`layers/${country}/${date}.${name}.json`);
+    if (r.ok) layers[name] = await r.json();
+  }
+  const sel = document.getElementById('layer');
+  sel.innerHTML = '';
+  for (const name of Object.keys(layers)) {
+    const o = document.createElement('option'); o.value = name; o.textContent = name; sel.appendChild(o);
+  }
+  current = Object.keys(layers)[0] || null;
+  loadStoredJudgments();
+  selected.clear();
+  history.replaceState(null, '', `?day=${country}/${date}`);
+  render();
+}
+
+// ── Card model for the current layer ─────────────────────────────────────
+function signalsById() {
+  const m = new Map();
+  for (const s of day.signals) m.set(s.id, s);
+  return m;
+}
+function cardsForLayer() {
+  const byId = signalsById();
+  const layer = layers[current];
+  if (!layer) return [];
+  const cards = [];
+  const placed = new Set();
+  for (const ev of layer.events) {
+    const sigs = ev.signalIds.map(id => byId.get(id)).filter(Boolean);
+    if (!sigs.length) continue;
+    sigs.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+    sigs.forEach(s => placed.add(s.id));
+    const sev = ev.severity ?? Math.max(-1, ...sigs.map(s => s.severity ?? -1));
+    cards.push({ id: ev.id, title: ev.title || sigs[0].title || '(untitled)', location: ev.locationName || (sigs[0].location || {}).name || '?',
+                 severity: sev < 0 ? null : sev, types: ev.types || [], signals: sigs, at: sigs[0].publishedAt, dropped: false, extra: ev.memberCountAllDays });
+  }
+  for (const s of day.signals) {
+    if (placed.has(s.id)) continue;
+    const d = (layer.decisions || {})[s.id] || {};
+    cards.push({ id: `drop:${s.id}`, title: s.title || '(untitled)', location: (s.location || {}).name || '?', severity: s.severity ?? null,
+                 types: s.glideCode ? [s.glideCode] : [], signals: [s], at: s.publishedAt, dropped: true, outcome: d.outcome || 'not in any event' });
+  }
+  cards.sort((a, b) => a.at.localeCompare(b.at));
+  return cards;
+}
+function judgedSignals() {
+  const set = new Set();
+  for (const g of judgments.same) g.forEach(id => set.add(id));
+  for (const p of judgments.apart) p.forEach(id => set.add(id));
+  return set;
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────
+function fmtTime(iso) { return iso ? iso.slice(11, 16) + 'Z' : '?'; }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function render() {
+  const cardsEl = document.getElementById('cards');
+  if (!day || !current) { cardsEl.innerHTML = '<div class="empty">No layers for this day yet. Run fetch_day.py (clear-as-run) and replay.py.</div>'; return; }
+  const layer = layers[current];
+  const cards = cardsForLayer();
+  const filter = document.getElementById('filter').value;
+  const judged = judgedSignals();
+  const shown = cards.filter(c => {
+    if (filter === 'multi') return c.signals.length > 1;
+    if (filter === 'sev4') return (c.severity ?? 0) >= 4;
+    if (filter === 'dropped') return c.dropped;
+    if (filter === 'unjudged') return !c.signals.some(s => judged.has(s.id));
+    return true;
+  });
+  const events = cards.filter(c => !c.dropped);
+  const assigned = events.reduce((n, c) => n + c.signals.length, 0);
+  const alerts = events.filter(c => (c.severity ?? 0) >= 4).length;
+  document.getElementById('stats').innerHTML =
+    `<b>${esc(day.country)} ${esc(day.date)}</b> · layer <b>${esc(current)}</b> · ${day.signals.length} signals · ${events.length} events · ` +
+    `merge ratio ${(events.length ? assigned / events.length : 0).toFixed(2)} · ${cards.length - events.length} dropped · ${alerts} events at severity ≥ 4 · showing ${shown.length} cards` +
+    (layer.params ? ` · <span title="${esc(JSON.stringify(layer.params))}">params</span>` : '');
+
+  cardsEl.innerHTML = '';
+  for (const c of shown) cardsEl.appendChild(renderCard(c, layer, judged));
+  renderCounts();
+}
+
+function renderCard(c, layer, judged) {
+  const el = document.createElement('div');
+  el.className = 'card' + (c.dropped ? ' dropped' : '') + (selected.has(c.id) ? ' selected' : '') + (c.signals.some(s => judged.has(s.id)) ? ' judged' : '');
+  const sevPill = c.severity != null ? `<span class="pill ${c.severity >= 4 ? 'sev4' : ''}">sev ${c.severity}</span>` : '';
+  const types = c.types.length ? `<span class="pill">${esc(c.types.join(','))}</span>` : '';
+  const extra = c.extra && c.extra > c.signals.length ? `<span class="meta">(${c.extra} signals across all days)</span>` : '';
+  const dropped = c.dropped ? `<span class="pill">${esc(c.outcome)}</span>` : '';
+  el.innerHTML = `
+    <div class="actions">
+      ${c.dropped ? '' : `<button data-act="confirm" title="Every signal on this card belongs to one event">Confirm card</button>`}
+      <label><input type="checkbox" data-act="select" ${selected.has(c.id) ? 'checked' : ''}> select</label>
+    </div>
+    <h3>${esc(c.title)} <span class="meta">${esc(c.location)} · ${fmtTime(c.at)} · ${c.signals.length} signal${c.signals.length === 1 ? '' : 's'}</span> ${sevPill} ${types} ${dropped} ${extra}</h3>`;
+  for (const s of c.signals) el.appendChild(renderSignal(s, c, layer));
+  el.querySelector('[data-act=select]').addEventListener('change', e => { e.target.checked ? selected.add(c.id) : selected.delete(c.id); render(); });
+  const confirm = el.querySelector('[data-act=confirm]');
+  if (confirm) confirm.addEventListener('click', () => { if (c.signals.length > 1) { judgments.same.push(c.signals.map(s => s.id)); } else { judgments.notes[c.signals[0].id] = 'confirmed alone'; } saveJudgments(); render(); });
+  return el;
+}
+
+function renderSignal(s, card, layer) {
+  const el = document.createElement('div');
+  el.className = 'sig';
+  const d = (layer.decisions || {})[s.id];
+  let jev = '';
+  if (d && d.candidates) {
+    const top = [...d.candidates].sort((a, b) => b.p - a.p)[0];
+    jev = `<div class="jev">Jev: <b>${esc(d.outcome)}</b> · relevance ${d.relevance} · matches any ${d.matchesAny ?? '–'} · none ${d.noneP ?? '–'}` +
+          (top ? ` · top candidate ${top.p} (${esc(top.summary.slice(0, 80))})` : '') + `</div>` +
+          (d.candidates.length ? `<details class="cands"><summary>${d.candidates.length} candidates seen</summary><ul>` +
+            [...d.candidates].sort((a, b) => b.p - a.p).map(x => `<li>${x.p} · ${esc(x.eventId)} · ${esc(x.summary)}</li>`).join('') + `</ul></details>` : '');
+  } else if (d && d.outcome) {
+    jev = `<div class="jev">${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}</div>`;
+  }
+  const link = s.url ? ` · <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : '';
+  el.innerHTML = `
+    <div>
+      <div class="who">${fmtTime(s.publishedAt)} · ${esc(s.source || '?')} · ${esc((s.location || {}).name || 'no location')}${s.severity != null ? ' · sev ' + s.severity : ''}${s.glideCode ? ' · ' + esc(s.glideCode) : ''}${link}</div>
+      <div class="text" dir="auto">${esc(s.text || s.title || '')}</div>
+    </div>
+    <div>${card.signals.length > 1 ? `<button data-act="pull" title="This signal is not about the same event as the others on the card">Pull out</button>` : ''}</div>
+    ${jev}`;
+  const pull = el.querySelector('[data-act=pull]');
+  if (pull) pull.addEventListener('click', () => {
+    for (const other of card.signals) if (other.id !== s.id) judgments.apart.push([s.id, other.id]);
+    saveJudgments(); render();
+  });
+  return el;
+}
+
+function renderCounts() {
+  document.getElementById('selcount').textContent = `${selected.size} cards selected`;
+  document.getElementById('merge').disabled = selected.size < 2;
+  document.getElementById('campaign').disabled = selected.size < 2;
+  document.getElementById('jcount').textContent = day ? `judgments: ${judgments.same.length} same-sets, ${judgments.apart.length} apart-pairs, ${judgments.campaigns.length} campaigns` : '';
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────
+function selectedSignalIds() {
+  const ids = [];
+  for (const c of cardsForLayer()) if (selected.has(c.id)) c.signals.forEach(s => ids.push(s.id));
+  return ids;
+}
+document.getElementById('merge').addEventListener('click', () => {
+  const ids = selectedSignalIds();
+  if (ids.length < 2) return;
+  judgments.same.push(ids);
+  selected.clear(); saveJudgments(); render();
+});
+document.getElementById('campaign').addEventListener('click', () => {
+  const ids = selectedSignalIds();
+  if (ids.length < 2) return;
+  const name = prompt('Campaign name (one actor, one target class, many places):');
+  if (!name) return;
+  judgments.campaigns.push({ name, signalIds: ids });
+  selected.clear(); saveJudgments(); render();
+});
+document.getElementById('deselect').addEventListener('click', () => { selected.clear(); render(); });
+document.getElementById('export').addEventListener('click', () => {
+  if (!day) return;
+  const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
+  const out = { ...judgments, country: day.country, date: day.date, name, createdAt: new Date().toISOString(), layersSeen: Object.keys(layers) };
+  const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${day.date}.${name}.json`;
+  a.click();
+  alert(`Downloaded ${a.download}. Move it to judgments/${day.country}/ so score.py can find it.`);
+});
+document.getElementById('import').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const j = JSON.parse(await f.text());
+  if (day && (j.country !== day.country || j.date !== day.date)) { alert('That file is for a different day'); return; }
+  judgments = { ...emptyJudgments(), ...j };
+  if (j.name) document.getElementById('judge').value = j.name;
+  saveJudgments(); render();
+});
+document.getElementById('clear').addEventListener('click', () => {
+  if (!day || !confirm('Clear every judgment for this day in this browser? Export first if you want to keep them.')) return;
+  judgments = { ...emptyJudgments(), country: day.country, date: day.date };
+  saveJudgments(); render();
+});
+document.getElementById('layer').addEventListener('change', e => { current = e.target.value; selected.clear(); render(); });
+document.getElementById('filter').addEventListener('change', render);
+document.getElementById('load').addEventListener('click', () => loadDay(document.getElementById('day').value.trim()));
+document.getElementById('day').addEventListener('keydown', e => { if (e.key === 'Enter') loadDay(e.target.value.trim()); });
+
+const param = new URLSearchParams(location.search).get('day');
+if (param) { document.getElementById('day').value = param; loadDay(param); }
+</script>
+</body>
+</html>

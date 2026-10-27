@@ -58,7 +58,7 @@ from lab_common import (
     write_json,
 )
 
-PROMPT_VERSION = "jev-v1.0"
+PROMPT_VERSION = "jev-v1.1"  # v1.1: admin names instead of landmark points in summaries
 
 SAME_EVENT_INSTRUCTIONS = (
     "`signal` is one new report (an X post, alert or database row) from a crisis "
@@ -196,6 +196,16 @@ class ReplayEvent:
         }
 
 
+def place_name(signal: dict, hierarchy: Hierarchy) -> str | None:
+    """District, else state, else whatever the signal resolved to. Landmark
+    points (level 4) are named like "Point 10.78, 34.19", which tells Jev
+    nothing, so prefer the admin names above them."""
+    loc = signal.get("location") or {}
+    if loc.get("level") is not None and loc["level"] <= 2:
+        return loc.get("name")
+    return hierarchy.name(signal.get("admin2Id")) or hierarchy.name(signal.get("admin1Id")) or loc.get("name")
+
+
 def candidates_for(signal: dict, events: list[ReplayEvent], window: timedelta, cap: int) -> list[ReplayEvent]:
     at = parse_iso(signal["publishedAt"])
     state = signal.get("admin1Id")
@@ -223,7 +233,7 @@ def run_jev(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayE
         if signal.get("retracted"):
             decisions[signal["id"]] = {"outcome": "retracted"}
             continue
-        loc_name = (signal.get("location") or {}).get("name")
+        loc_name = place_name(signal, hierarchy)
         cands = candidates_for(signal, events, window, params["maxCandidates"])
         keys = {f"e{n}": ev for n, ev in enumerate(cands, 1)}
         text = " ".join(filter(None, [signal.get("title"), signal.get("text")])) or "unknown"
@@ -335,7 +345,7 @@ def run_naive_state(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list
             decisions[signal["id"]] = {"outcome": "joined", "eventId": match.id}
         else:
             counter += 1
-            ev = ReplayEvent(f"L{counter}", signal, (signal.get("location") or {}).get("name"))
+            ev = ReplayEvent(f"L{counter}", signal, place_name(signal, hierarchy))
             events.append(ev)
             decisions[signal["id"]] = {"outcome": "new", "eventId": ev.id}
     return events, decisions

@@ -123,3 +123,16 @@ signalIds), `notes{}`. Signal-level, so one file scores every layer.
 | `score.py` | layers × judgments → metrics |
 | `seed/` | the week's audit: labelled events, scored alerts, reports, old prototype UI |
 | `data/ layers/ judgments/` | generated, gitignored |
+
+## Known gaps (as of 27 Oct)
+
+- **The window can't be tested on one day.** `replay.py` starts with no open
+  events, so every candidate comes from the same day and the 72h and 7d layers
+  are identical. Testing the window needs consecutive days fetched and replayed
+  in sequence, seeding each day with the previous day's events. Not built yet.
+- **Projected alerts are not comparable across layers.** `clear-as-run` carries
+  CLEAR's event severity (Claude's estimate); replay layers only have signal
+  severities, which are null for most X posts, so their alert count reads low.
+- Dataminr signals arrive with an empty description and the text in the title;
+  the replay and viewer use both, so nothing is lost, but summaries built from
+  the title are shorter for them.

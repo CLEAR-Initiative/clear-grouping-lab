@@ -54,13 +54,16 @@ under `layers/.cache/<prompt version>/`, so reruns with unchanged prompts are fr
 python3 -m http.server 8765
 # then open http://localhost:8765/viewer.html?day=sudan/2026-10-20
 ```
-The viewer shows one card per event in time order, with every signal's original
-text, and a grey card for every signal in no event. Switch layers from the
-dropdown. Actions: **Confirm card** (all signals on it are one event), **Pull out**
-(this signal is not about the same event as the others), **select + Merge** (these
-cards are one event), **select + Mark as one campaign**. Judgments are kept in the
-browser per day and exported with **Export judgments**; move the file into
-`judgments/sudan/` for scoring. Nothing on the page is pre-judged by a model.
+The viewer has three tabs. **Grouped events** shows each multi-signal event of the
+chosen layer as a table of its signals' original text: tick **not this one** on any
+signal that reports a different occurrence, then **Yes, one event** for the rest.
+**Single signals** lists every single-signal event plus every dropped signal (grey),
+grouped by state: select rows that report the same occurrence and press **Same
+event** (or **One campaign**) in the bottom bar; a grouped card can be selected too.
+**My judgments** lists every answer with undo, and downloads the file; move it into
+`judgments/sudan/` for scoring. The search box filters both lists, and a selection
+survives filter changes, so you can merge across states. Judgments are kept in the
+browser per day. Nothing on the page is pre-judged by a model.
 
 ```bash
 python3 score.py --country sudan --date 2026-10-20 --all

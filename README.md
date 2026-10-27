@@ -17,7 +17,9 @@ Non-negotiable constraints:
 ## Setup
 
 Python 3.9+ and nothing else (stdlib only). Copy `.env.example` to `.env` and fill
-`CLEAR_API_URL`, `CLEAR_API_KEY` and `OPENROUTER_API_KEY` from clear-pipeline's **dev** env.
+`CLEAR_API_URL` and `CLEAR_API_KEY` from clear-pipeline's **dev** env, and one Jev key:
+`OPENROUTER_API_KEY` (an `sk-or-…` key, the route clear-pipeline uses) or
+`TYPESAFE_API_KEY` (a key from typesafe.ai, used directly when set).
 Then `python3 check_env.py` confirms the host is dev and the key is accepted, without
 printing either.
 

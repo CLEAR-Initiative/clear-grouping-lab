@@ -17,7 +17,9 @@ host = url.split("//")[-1].split("/")[0]
 print(f"CLEAR_API_URL host: {host or '(unset)'}  {'OK dev' if host == 'dev-api.clearinitiative.io' else 'NOT the dev API'}")
 key = os.environ.get("CLEAR_API_KEY", "")
 print(f"CLEAR_API_KEY: {'set' if key else 'unset'}, {'looks like an API key (sk_live_…)' if key.startswith('sk_live_') else 'does not start with sk_live_ — the API will reject it'}")
-print(f"OPENROUTER_API_KEY: {'set' if os.environ.get('OPENROUTER_API_KEY') else 'unset'}")
+ork, tsk = os.environ.get("OPENROUTER_API_KEY", ""), os.environ.get("TYPESAFE_API_KEY", "")
+print(f"OPENROUTER_API_KEY: {'set' if ork else 'unset'}" + ("" if not ork or ork.startswith("sk-or-") else " — but OpenRouter keys start with sk-or-; if this came from typesafe.ai put it in TYPESAFE_API_KEY instead"))
+print(f"TYPESAFE_API_KEY: {'set (replay.py will use TypeSafe directly)' if tsk else 'unset'}")
 try:
     me = graphql("query { me { email role } }")["me"]
     if me:

@@ -93,6 +93,23 @@ NONE_CRITERION = "A different occurrence from every event listed, or no specific
 
 # ── Jev transport (shape copied from clear-pipeline/providers/jev.py) ─────────
 
+def jev_provider() -> tuple[str, str, str]:
+    """(key, url, model). TypeSafe's own API when TYPESAFE_API_KEY is set,
+    else OpenRouter's Decisions endpoint with OPENROUTER_API_KEY (what
+    clear-pipeline uses). JEV_URL / JEV_MODEL override either."""
+    if os.environ.get("TYPESAFE_API_KEY"):
+        return (
+            os.environ["TYPESAFE_API_KEY"],
+            os.environ.get("JEV_URL", "https://api.typesafe.ai/v1/systemone"),
+            os.environ.get("JEV_MODEL", "jev-latest"),
+        )
+    return (
+        require_env("OPENROUTER_API_KEY"),
+        os.environ.get("JEV_URL", "https://openrouter.ai/api/alpha/decisions"),
+        os.environ.get("JEV_MODEL", "typesafe/jev-1.13"),
+    )
+
+
 def jev_call(body: dict, *, cache_dir, retries: int = 3, timeout: float = 60.0) -> dict:
     cache_dir.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -100,8 +117,7 @@ def jev_call(body: dict, *, cache_dir, retries: int = 3, timeout: float = 60.0) 
     if cached.exists():
         return json.loads(cached.read_text())
 
-    key = require_env("OPENROUTER_API_KEY")
-    url = os.environ.get("JEV_URL", "https://openrouter.ai/api/alpha/decisions")
+    key, url, _ = jev_provider()
     req_body = json.dumps(body, ensure_ascii=False).encode()
     last = "no attempts"
     for attempt in range(1, retries + 1):
@@ -357,7 +373,8 @@ def main() -> None:
         "anyThreshold": args.any_threshold,
         "linkThreshold": args.link_threshold,
         "relevanceThreshold": args.relevance_threshold,
-        "model": os.environ.get("JEV_MODEL", "typesafe/jev-1.13"),
+        "model": jev_provider()[2] if args.algo.startswith("jev") else None,
+        "jevHost": jev_provider()[1].split("//")[-1].split("/")[0] if args.algo.startswith("jev") else None,
         "promptVersion": PROMPT_VERSION,
         "candidateScope": "same admin-1, country-level events everywhere",
         "summary": "rule-built (first title, place, count, span, latest title)",

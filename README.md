@@ -58,6 +58,9 @@ Good to know:
   date but no time.
 - The search box filters by text or place name, and selections survive a
   search. That's the quickest way to find every post about one town.
+- The source menu next to it shows only one source's signals, for example
+  `sudan-war-x` (the X posts). On tab 1 it keeps the cards that contain at
+  least one signal from that source, and still shows their other rows.
 - Partial answers are useful. Download and send whatever you have.
 - The file contains real signal text. Please don't forward it.
 
@@ -151,6 +154,9 @@ Run these from the lab folder. Swap in the country and date you want.
    ```bash
    python3 -m http.server 8765
    ```
+   <http://localhost:8765/layer-key> explains every layer step by step, with the
+   day's numbers and settings read from the layer files. The viewer links to it
+   as *What the layers do*.
 5. **Send it to judges.** Build a pack: one HTML file with the day built in.
    It writes `packs/sudan-2026-10-20.html` (gitignored, about 2–4 MB) and builds
    in the translations and map outlines when they exist. Email it
@@ -287,6 +293,7 @@ signalIds), `notes{}`. Signal-level, so one file scores every layer.
 | `replay.py` | day file → candidate layers (see [Layers](#layers)) |
 | `glide_taxonomy.json` | glide code → type family (level 1 and 2), copied from clear-pipeline's `event_categories.json` for the `v2-*` layers |
 | `viewer.html` | static judging UI |
+| `layer-key/index.html` | served at `/layer-key`: what each layer does, its settings and the day's numbers |
 | `compare.html` | short link to the viewer's *Compare layers* tab: two layers side by side, grouped by the signals either one merged, e.g. `compare.html?day=sudan/2026-10-20&layer=jev-v1` (left defaults to `clear-as-run`; `&vs=` picks another). Hidden in packs |
 | `make_pack.py` | day + layers → one self-contained `packs/<country>-<date>.html` for judges |
 | `score.py` | layers × judgments → metrics |

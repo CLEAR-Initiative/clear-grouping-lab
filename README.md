@@ -23,8 +23,8 @@ and decision D-0166. Glossary in [CONTEXT.md](CONTEXT.md), session handoff in
 *This section is written so it can be pasted into an email to judges.*
 
 1. **Open the file** you were sent (for example `sudan-2026-10-20.html`) by
-   double-clicking it. It opens in your web browser. Chrome, Edge, Firefox and
-   Safari all work, and nothing is uploaded anywhere.
+   double-clicking it. It opens in your web browser; Chrome or Edge works best.
+   Nothing is uploaded anywhere.
 2. **Type your name** in the *Judge* box at the top right.
 3. **Tab 1 · Grouped events.** Each card is one event that was built from
    several signals (posts and reports). Read the rows. Tick **not this one** on

@@ -115,8 +115,9 @@ body.wide .wrap,body.wide .tray .in{max-width:1640px}
 .cmp > .side:first-child{border-left:0}
 .side-h{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);padding:8px 12px;background:var(--bg)}
 .ev{border-top:1px solid var(--line)}
-.ev-h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:8px 12px;font-size:13.5px}
-.ev-h b{flex:1 1 200px;min-width:0}
+.ev-h{display:flex;gap:4px 10px;align-items:baseline;padding:8px 12px;font-size:13.5px}
+.ev-h b{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* one line, so both columns' rows line up; full title on hover */
+.ev-h .stat,.ev-h .chip{flex:none;white-space:nowrap}
 .ev-h .loc{color:var(--muted);font-weight:500}
 .ev.dropped .ev-h{color:var(--muted)}
 .ev td.txt{min-width:220px}
@@ -813,7 +814,7 @@ function cmpSide(name, cs, num, merges, camps) {
     </tr>`;
   const block = (cls, head, rows) => `<div class="ev ${cls}"><div class="ev-h">${head}</div><div class="tblwrap"><table><tbody>${rows}</tbody></table></div></div>`;
   return `<div class="side"><div class="side-h">${esc(name)} · ${evs.length} event${evs.length === 1 ? '' : 's'}${drops.length ? ` · ${drops.length} dropped` : ''}</div>
-    ${evs.map(c => block('', `<b>${esc(c.title)} <span class="loc">· ${esc(c.location)}</span></b><span class="stat">${c.signals.length} signal${c.signals.length === 1 ? '' : 's'}${c.allDays && c.allDays > c.signals.length ? ` (${c.allDays} all days)` : ''}</span>${sevChip(c.severity)}`,
+    ${evs.map(c => block('', `<b title="${esc(`${c.title} · ${c.location}`)}">${esc(c.title)} <span class="loc">· ${esc(c.location)}</span></b><span class="stat">${c.signals.length} signal${c.signals.length === 1 ? '' : 's'}${c.allDays && c.allDays > c.signals.length ? ` (${c.allDays} all days)` : ''}</span>${sevChip(c.severity)}`,
       c.signals.map(s => row(s, c)).join(''))).join('')}
     ${drops.length ? block('dropped', `<b>Not in any event</b>`, drops.map(c => row(c.signals[0], c)).join('')) : ''}</div>`;
 }

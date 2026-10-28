@@ -98,6 +98,26 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .jlist .row .what{flex:1;min-width:0}
 .jlist .row .what small{display:block;color:var(--muted)}
 .jlist .empty{padding:10px 14px;color:var(--muted);font-size:13px}
+/* Compare tab: wider page, one card per group of signals, the two layers as columns. */
+body.wide .wrap,body.wide .tray .in{max-width:1640px}
+.cmpsum{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin:0 0 14px;overflow:hidden}
+.cmpsum table{width:auto;min-width:min(520px,100%)}
+.cmpsum td,.cmpsum th{font-variant-numeric:tabular-nums}
+.cmpsum td.n{font-family:var(--font-mono);text-align:right;white-space:nowrap}
+.cmpsum p{margin:0;padding:8px 10px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.cmp{display:grid;grid-template-columns:1fr 1fr}
+.cmp > .side{min-width:0;border-left:1px solid var(--line)}
+.cmp > .side:first-child{border-left:0}
+.side-h{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);padding:8px 12px;background:var(--bg)}
+.ev{border-top:1px solid var(--line)}
+.ev-h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:8px 12px;font-size:13.5px}
+.ev-h b{flex:1 1 200px;min-width:0}
+.ev-h .loc{color:var(--muted);font-weight:500}
+.ev.dropped .ev-h{color:var(--muted)}
+.ev td.txt{min-width:220px}
+.sn{display:inline-block;min-width:22px;text-align:center;font-family:var(--font-mono);font-size:11px;border:1px solid var(--line);border-radius:3px;padding:0 3px;margin-right:6px;color:var(--fg)}
+.chip.diff{background:var(--warn);color:#fff}
+@media (max-width:760px){.cmp{grid-template-columns:1fr}.cmp > .side{border-left:0;border-top:1px solid var(--line)}}
 .export{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}
 .msg{color:var(--good);font-size:13px}
 .empty{color:var(--muted);padding:40px 0;text-align:center}
@@ -124,6 +144,7 @@ code{font-family:var(--font-mono);font-size:12.5px}
   <button class="tab" role="tab" data-tab="multi" aria-selected="true">1 · Grouped events<span class="n" id="n-multi"></span></button>
   <button class="tab" role="tab" data-tab="single">2 · Single signals<span class="n" id="n-single"></span></button>
   <button class="tab" role="tab" data-tab="judg">3 · My judgments<span class="n" id="n-judg"></span></button>
+  <button class="tab" role="tab" data-tab="compare">Compare layers<span class="n" id="n-compare"></span></button>
   <input type="search" id="q" placeholder="Filter by text or place">
   <span class="progress" id="progress"></span>
 </nav>
@@ -153,6 +174,17 @@ code{font-family:var(--font-mono);font-size:12.5px}
   </div>
   <div class="howto" id="howtoSave">Judgments save in this browser per day as you go. <b>Download</b> writes <code id="fname">&lt;date&gt;.&lt;judge&gt;.json</code>; move it to <code id="fdir">judgments/&lt;country&gt;/</code> and run <code>python3 score.py --country … --date … --all</code>.</div>
   <div id="jlists"></div>
+</section>
+
+<section class="panel" id="panel-compare" hidden>
+  <div class="howto"><b>How two layers grouped the same signals.</b> The right column is the <b>Layer</b> chosen at the top; pick the left one below. Each card is a set of signals that either layer put into one event, so both columns hold the same signals: read across to see what one layer merged, split or dropped that the other didn't. Row numbers match across the columns. Tick <b>select</b> and use the bar at the bottom to record your own answer, as on tab 2.</div>
+  <div class="bar">
+    <label>Left <select id="vs"></select></label>
+    <label>Show <select id="cmpShow"><option value="diff">groups the layers disagree on</option><option value="grouping">grouping differences only (not drops)</option><option value="all">every group</option></select></label>
+    <label>Order <select id="cmpOrder"><option value="diff">biggest difference first</option><option value="time">by time</option></select></label>
+  </div>
+  <div id="cmpsum"></div>
+  <div id="compare"></div>
 </section>
 </div>
 
@@ -231,7 +263,10 @@ async function boot() {
   daySel.innerHTML = days.map(d => `<option>${esc(d)}</option>`).join('');
   if (!days.length) { document.getElementById('multi').innerHTML = '<div class="empty">No days yet. Run <code>fetch_day.py</code> and <code>replay.py</code>, then reload.</div>'; return; }
   daySel.value = want || days[days.length - 1];
+  const wantTab = new URLSearchParams(location.search).get('tab');   // read before loadDay rewrites the URL
   await loadDay(daySel.value);
+  const t = document.querySelector(`.tab[data-tab="${wantTab}"]`);
+  if (t && !t.hidden) t.click();
 }
 async function loadDay(spec) {
   const [country, date] = spec.split('/');
@@ -248,12 +283,17 @@ async function loadDay(spec) {
   const wantLayer = new URLSearchParams(location.search).get('layer');
   current = layers[wantLayer] ? wantLayer : Object.keys(layers)[0] || null;
   sel.value = current || '';
+  pickVs(new URLSearchParams(location.search).get('vs'));
   selected.clear(); open.clear();
   restore();
   syncUrl();
   render();
 }
-function syncUrl() { if (day) try { history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}`); } catch (e) {} }
+function syncUrl() {
+  if (!day) return;
+  const cmp = tab === 'compare' && vs ? `&tab=compare&vs=${encodeURIComponent(vs)}` : '';
+  try { history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}${cmp}`); } catch (e) {}
+}
 
 // ── Card model ───────────────────────────────────────────────────────────
 function stateOf(s) {
@@ -261,8 +301,8 @@ function stateOf(s) {
   if (a1) return a1.name;
   return (s.location && s.location.level === 1) ? s.location.name : 'Country only (no state)';
 }
-function cards() {
-  const layer = layers[current];
+function cards(name = current) {
+  const layer = layers[name];
   if (!layer) return [];
   const out = [], placed = new Set();
   for (const ev of layer.events) {
@@ -270,7 +310,7 @@ function cards() {
     if (!sigs.length) continue;
     sigs.forEach(s => placed.add(s.id));
     const sev = ev.severity ?? Math.max(-1, ...sigs.map(s => s.severity ?? -1));
-    out.push({ key: `${current}|${ev.id}`, title: ev.title || sigs[0].title || '(untitled)', location: ev.locationName || (sigs[0].location || {}).name || '?',
+    out.push({ key: `${name}|${ev.id}`, title: ev.title || sigs[0].title || '(untitled)', location: ev.locationName || (sigs[0].location || {}).name || '?',
                severity: sev < 0 ? null : sev, types: ev.types || [], signals: sigs, at: sigs[0].publishedAt, last: sigs[sigs.length - 1].publishedAt,
                dropped: false, allDays: ev.memberCountAllDays });
   }
@@ -315,13 +355,13 @@ function badges(s, merges, camps) {
   return (merges.has(s.id) ? `<span class="chip merge">merge ${merges.get(s.id)}</span>` : '') +
          (camps.has(s.id) ? `<span class="chip camp">${esc(camps.get(s.id))}</span>` : '');
 }
-function jevLine(s) {
-  const d = ((layers[current] || {}).decisions || {})[s.id];
+function jevLine(s, name = current) {
+  const d = ((layers[name] || {}).decisions || {})[s.id];
   if (!d || !d.outcome || d.outcome === 'dropped' && !d.candidates) return '';
   const cands = [...(d.candidates || [])].sort((a, b) => b.p - a.p);
   const head = `${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}${d.matchesAny != null ? ` · matches any ${d.matchesAny}` : ''}${cands[0] ? ` · top ${cands[0].p}` : ''}`;
-  if (!cands.length) return `<div class="jev">${current}: ${head}</div>`;
-  return `<div class="jev"><details><summary>${esc(current)}: ${head} · ${cands.length} candidates</summary><ul>${cands.map(c => `<li>${c.p} · ${esc(c.summary)}</li>`).join('')}</ul></details></div>`;
+  if (!cands.length) return `<div class="jev">${esc(name)}: ${head}</div>`;
+  return `<div class="jev"><details><summary>${esc(name)}: ${head} · ${cands.length} candidates</summary><ul>${cands.map(c => `<li>${c.p} · ${esc(c.summary)}</li>`).join('')}</ul></details></div>`;
 }
 
 function render() {
@@ -343,6 +383,10 @@ function render() {
   document.getElementById('progress').textContent = `answered ${answered}/${multi.length} · merges ${J.merges.length} · campaigns ${J.campaigns.length}`;
 
   const merges = mergeOf(), camps = campOf();
+  document.body.classList.toggle('wide', tab === 'compare');
+  document.getElementById('n-compare').textContent = vs ? compareGroups(cards(vs), all).filter(g => !g.same).length : '';
+  syncUrl();
+  if (tab === 'compare') renderCompare(q, merges, camps);
   if (tab === 'multi') renderMulti(multi, q, merges, camps);
   if (tab === 'single') renderSingle(single, q, merges, camps);
   if (tab === 'judg') renderJudgments();
@@ -436,6 +480,115 @@ function renderJudgments() {
     block('Campaigns', campRows, 'None yet.') + legacy;
 }
 
+// ── Compare tab ──────────────────────────────────────────────────────────
+// Two layers side by side: `current` on the right, `vs` on the left. Signals either layer put in one
+// event are joined into a group (union-find over both layers' events), so each group holds the same
+// signals on both sides and shows how each layer split them. Hidden in packs, so judges aren't steered.
+let vs = null;
+if (PACK) document.querySelector('.tab[data-tab="compare"]').hidden = true;
+function pickVs(want) {
+  const names = Object.keys(layers).filter(n => n !== current), sel = document.getElementById('vs');
+  vs = names.includes(want) ? want : names.includes('clear-as-run') ? 'clear-as-run' : names[0] || null;
+  sel.innerHTML = names.map(n => `<option>${esc(n)}</option>`).join('');
+  sel.value = vs || '';
+  if (!PACK) document.querySelector('.tab[data-tab="compare"]').hidden = !vs;
+}
+function pairKey(a, b) { return a < b ? `${a} ${b}` : `${b} ${a}`; }
+function pairsOf(list) {   // every signal pair a layer put in one event
+  const p = new Set();
+  for (const c of list) if (!c.dropped) c.signals.forEach((s, i) => c.signals.slice(i + 1).forEach(t => p.add(pairKey(s.id, t.id))));
+  return p;
+}
+function compareGroups(L, R) {
+  const parent = new Map(day.signals.map(s => [s.id, s.id]));
+  const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+  for (const c of [...L, ...R]) for (const s of c.signals.slice(1)) parent.set(find(s.id), find(c.signals[0].id));
+  const groups = new Map();
+  const add = (side, c) => {
+    const k = find(c.signals[0].id);
+    if (!groups.has(k)) groups.set(k, { L: [], R: [], ids: new Set() });
+    groups.get(k)[side].push(c); c.signals.forEach(s => groups.get(k).ids.add(s.id));
+  };
+  L.forEach(c => add('L', c)); R.forEach(c => add('R', c));
+  // Shape of one side: its events as sorted id lists, dropped signals marked. Equal shapes = the layers agree.
+  const shape = (cs, drops) => cs.map(c => (drops && c.dropped ? 'd:' : '') + c.signals.map(s => s.id).sort().join(',')).sort().join('|');
+  return [...groups.values()].map(g => {
+    const sigs = [...g.ids].map(id => sigById.get(id)).sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+    return { ...g, sigs, at: sigs[0].publishedAt, nL: g.L.length, nR: g.R.length,
+             same: shape(g.L, true) === shape(g.R, true), sameGrouping: shape(g.L) === shape(g.R) };
+  });
+}
+function judgedPairs() {
+  const { same, apart } = derived(), out = [];
+  for (const g of same) g.forEach((a, i) => g.slice(i + 1).forEach(b => out.push({ k: pairKey(a, b), same: true })));
+  for (const [a, b] of apart) out.push({ k: pairKey(a, b), same: false });
+  return out;
+}
+function srcChips(s) { return `<span class="chip src">${esc(SRC[s.source] || s.source)}</span>${s.glideCode ? `<span class="chip">${esc(s.glideCode)}</span>` : ''}${sevChip(s.severity)}`; }
+function srcLink(s) { return s.url && s.url.startsWith('http') ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ''; }
+
+function renderCompare(q, merges, camps) {
+  const el = document.getElementById('compare'), sum = document.getElementById('cmpsum');
+  if (!vs) { sum.innerHTML = ''; el.innerHTML = '<div class="empty">This day has only one layer. Run <code>replay.py</code> to add another.</div>'; return; }
+  const L = cards(vs), R = cards(current), groups = compareGroups(L, R);
+  const pL = pairsOf(L), pR = pairsOf(R), both = [...pL].filter(k => pR.has(k)).length;
+  const judged = judgedPairs(), right = p => judged.filter(j => p.has(j.k) === j.same).length;
+
+  // Summary: the shape of each layer, then where they agree.
+  const stats = list => {
+    const evs = list.filter(c => !c.dropped), n = evs.reduce((a, c) => a + c.signals.length, 0);
+    return [evs.length, (evs.length ? n / evs.length : 0).toFixed(2), evs.filter(c => c.signals.length > 1).length,
+            list.length - evs.length, evs.filter(c => (c.severity ?? 0) >= 4).length];
+  };
+  const sL = stats(L), sR = stats(R);
+  const rows = [['events', 0], ['merge ratio', 1], ['events with 2+ signals', 2], ['signals dropped', 3], ['events at severity ≥ 4', 4]]
+    .map(([t, i]) => [t, sL[i], sR[i]]);
+  if (judged.length) rows.push([`your judged pairs it gets right`, `${right(pL)}/${judged.length}`, `${right(pR)}/${judged.length}`]);
+  const differ = groups.filter(g => !g.same).length, regroup = groups.filter(g => !g.sameGrouping).length;
+  sum.innerHTML = `<div class="cmpsum"><div class="tblwrap"><table><thead><tr><th></th><th style="text-align:right">${esc(vs)}</th><th style="text-align:right">${esc(current)}</th></tr></thead><tbody>
+    ${rows.map(([t, a, b]) => `<tr><td>${t}</td><td class="n">${a}</td><td class="n">${b}</td></tr>`).join('')}</tbody></table></div>
+    <p>Signal pairs put in one event: ${both} by both, ${pL.size - both} only by ${esc(vs)}, ${pR.size - both} only by ${esc(current)}. ${groups.length} groups: ${groups.length - differ} identical, ${regroup} grouped differently, ${differ - regroup} differ only in what was dropped.</p></div>`;
+
+  const show = document.getElementById('cmpShow').value, order = document.getElementById('cmpOrder').value;
+  const shown = groups.filter(g => (show === 'all' || (show === 'grouping' ? !g.sameGrouping : !g.same)) && g.sigs.some(s => matches(s, q)));
+  shown.sort(order === 'time' ? (a, b) => a.at.localeCompare(b.at)
+    : (a, b) => Math.abs(b.nL - b.nR) - Math.abs(a.nL - a.nR) || b.sigs.length - a.sigs.length || a.at.localeCompare(b.at));
+  if (!shown.length) { el.innerHTML = `<div class="empty">${groups.length ? 'Nothing to show with these filters.' : 'No signals.'}</div>`; return; }
+
+  el.innerHTML = shown.map(g => {
+    const num = new Map(g.sigs.map((s, i) => [s.id, i + 1]));
+    const lead = [...g.R, ...g.L].filter(c => !c.dropped).sort((a, b) => b.signals.length - a.signals.length)[0] || g.R[0];
+    const kind = g.sameGrouping ? (g.same ? '' : 'drops differ') : g.nR < g.nL ? `${current} merges` : g.nR > g.nL ? `${current} splits` : 'regrouped';
+    const span = md(g.at) === md(g.sigs[g.sigs.length - 1].publishedAt) ? `${md(g.at)} ${hm(g.at)}–${hm(g.sigs[g.sigs.length - 1].publishedAt)}` : `${md(g.at)} → ${md(g.sigs[g.sigs.length - 1].publishedAt)}`;
+    const jk = judged.filter(j => { const [a, b] = j.k.split(' '); return g.ids.has(a) && g.ids.has(b); });
+    const jChip = jk.length ? `<span class="chip" title="Your judged pairs in this group that each layer gets right">judged ${esc(vs)} ${jk.filter(j => pL.has(j.k) === j.same).length}/${jk.length} · ${esc(current)} ${jk.filter(j => pR.has(j.k) === j.same).length}/${jk.length}</span>` : '';
+    const allSel = g.sigs.every(s => selected.has(s.id));
+    return `<article class="card ${allSel ? 'sel' : ''}">
+      <header><h2>${esc(lead.title)} <span class="loc">· ${esc(lead.location)}</span></h2>
+        <span class="stat">${span} · ${g.sigs.length} signal${g.sigs.length === 1 ? '' : 's'} · ${g.nL} → ${g.nR}</span>
+        ${kind ? `<span class="chip diff">${esc(kind)}</span>` : ''}${jChip}</header>
+      <div class="cmp">${cmpSide(vs, g.L, num, merges, camps)}${cmpSide(current, g.R, num, merges, camps)}</div>
+    </article>`;
+  }).join('');
+}
+function cmpSide(name, cs, num, merges, camps) {
+  const evs = cs.filter(c => !c.dropped).sort((a, b) => a.at.localeCompare(b.at)), drops = cs.filter(c => c.dropped);
+  const row = (s, c) => `<tr data-sig="${s.id}" class="${selected.has(s.id) ? 'sel' : ''} ${c.dropped ? 'dropped' : ''} ${open.has(s.id) ? 'open' : ''}">
+      <td class="ck"><input type="checkbox" data-act="sel" data-sig="${s.id}" ${selected.has(s.id) ? 'checked' : ''} aria-label="select"></td>
+      <td class="mono"><span class="sn">${num.get(s.id)}</span>${hm(s.publishedAt)}</td>
+      <td>${srcChips(s)}${c.dropped ? `<span class="chip drop">${esc(c.outcome)}</span>` : ''}</td>
+      <td class="loc">${esc((s.location || {}).name || '—')}</td>
+      <td class="txt">${textCell(s)}${badges(s, merges, camps)}${srcLink(s)}${jevLine(s, name)}</td>
+    </tr>`;
+  const block = (cls, head, rows) => `<div class="ev ${cls}"><div class="ev-h">${head}</div><div class="tblwrap"><table><tbody>${rows}</tbody></table></div></div>`;
+  return `<div class="side"><div class="side-h">${esc(name)} · ${evs.length} event${evs.length === 1 ? '' : 's'}${drops.length ? ` · ${drops.length} dropped` : ''}</div>
+    ${evs.map(c => block('', `<b>${esc(c.title)} <span class="loc">· ${esc(c.location)}</span></b><span class="stat">${c.signals.length} signal${c.signals.length === 1 ? '' : 's'}${c.allDays && c.allDays > c.signals.length ? ` (${c.allDays} all days)` : ''}</span>${sevChip(c.severity)}`,
+      c.signals.map(s => row(s, c)).join(''))).join('')}
+    ${drops.length ? block('dropped', `<b>Not in any event</b>`, drops.map(c => row(c.signals[0], c)).join('')) : ''}</div>`;
+}
+for (const id of ['cmpShow', 'cmpOrder']) document.getElementById(id).addEventListener('input', render);
+document.getElementById('vs').addEventListener('change', e => { vs = e.target.value; render(); });
+
 function renderTray() {
   const n = selected.size;
   document.getElementById('tray').classList.toggle('on', n > 0);
@@ -522,7 +675,7 @@ document.getElementById('tabs').addEventListener('click', e => {
   render();
 });
 for (const id of ['q', 'hideDoneMulti', 'showDropped', 'hideMerged', 'order']) document.getElementById(id).addEventListener('input', render);
-document.getElementById('layer').addEventListener('change', e => { current = e.target.value; syncUrl(); render(); });
+document.getElementById('layer').addEventListener('change', e => { current = e.target.value; pickVs(vs); syncUrl(); render(); });
 document.getElementById('day').addEventListener('change', e => loadDay(e.target.value));
 document.getElementById('judge').addEventListener('input', e => { try { localStorage.setItem('judge', e.target.value); } catch (x) {} if (tab === 'judg') renderJudgments(); });
 

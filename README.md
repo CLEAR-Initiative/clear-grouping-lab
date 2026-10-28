@@ -188,6 +188,7 @@ signalIds), `notes{}`. Signal-level, so one file scores every layer.
 | `fetch_day.py` | dev API → day file + `clear-as-run` layer |
 | `replay.py` | day file → candidate layers (`jev-v1`, `naive-state`) |
 | `viewer.html` | static judging UI |
+| `compare.html` | short link to the viewer's *Compare layers* tab: two layers side by side, grouped by the signals either one merged, e.g. `compare.html?day=sudan/2026-10-20&layer=jev-v1` (left defaults to `clear-as-run`; `&vs=` picks another). Hidden in packs |
 | `make_pack.py` | day + layers → one self-contained `packs/<country>-<date>.html` for judges |
 | `score.py` | layers × judgments → metrics |
 | `seed/` | the week's audit: labelled events, scored alerts, reports, old prototype UI |

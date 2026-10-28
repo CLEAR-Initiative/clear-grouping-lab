@@ -531,6 +531,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
   if (!judge.value.trim()) {
     judge.value = (prompt('Your name, so each judge gets their own file:') || '').trim();
     try { localStorage.setItem('judge', judge.value); } catch (x) {}
+    renderJudgments();  // the filename on this tab follows the name
   }
   const name = (judge.value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
   const { same, apart } = derived();

@@ -107,6 +107,14 @@ Run these from the lab folder. Swap in the country and date you want.
    ```bash
    python3 replay.py --country sudan --date 2026-10-20 --algo naive-state
    ```
+   `jev-v1` now compares each signal's extracted characteristics
+   (what/where/when/who/scale) against each candidate event's, not only the raw
+   text — run `characterize.py` first to produce them (one cached model call per
+   signal through `OPENROUTER_API_KEY`). Without the file the grouper still runs
+   and the model reads the characteristics from the signal text instead.
+   ```bash
+   python3 characterize.py --country sudan --date 2026-10-20
+   ```
    ```bash
    python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1
    ```
@@ -299,6 +307,13 @@ promotedTo). `layers/index.json` lists the layers per day for the viewer.
 `title`/`text` are null when the original is English; `places` are spelled as
 they appear in the English text.
 
+**Characteristics** `data/<country>/<date>.characteristics.json`: `model`,
+`promptVersion`, `createdAt`, `signals{signalId}` (type, places[], actors[],
+occurredAt, scale) — the grouping-relevant what/where/when/who/scale pulled from
+each signal alone. `type` is "none" for a roundup / analysis / no specific
+occurrence. `replay.py`'s Jev layer feeds these into its state so same-event
+decisions compare fields, not only prose.
+
 **Geo** `data/<country>/geo.json`: `areas{locationId}` (l level, c centre,
 bb bbox, r outer rings simplified to ~1 km) for the country, states and
 districts; `points{locationId}` ([lon, lat]) for the level-4 places signals
@@ -316,6 +331,7 @@ signalIds), `notes{}`. Signal-level, so one file scores every layer.
 | `fetch_day.py` | dev API → day file + `clear-as-run` layer (then runs `fetch_geo.py`) |
 | `fetch_geo.py` | dev API → `geo.json`: outlines and points for the viewer's maps |
 | `translate.py` | day file → English translations + place names per signal (OpenRouter) |
+| `characterize.py` | day file → per-signal characteristics (type, places, actors, occurredAt, scale) that the Jev grouper weighs (OpenRouter) |
 | `replay.py` | day file → candidate layers (see [Layers](#layers)) |
 | `glide_taxonomy.json` | glide code → type family (level 1 and 2), copied from clear-pipeline's `event_categories.json` for the `v2-*` layers |
 | `viewer.html` | static judging UI |

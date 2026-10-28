@@ -88,25 +88,48 @@ from lab_common import (
     write_json,
 )
 
-PROMPT_VERSION = "jev-v1.1"  # v1.1: admin names instead of landmark points in summaries
+PROMPT_VERSION = "jev-v2"  # v2: structured signal characteristics (characterize.py) fed into the state + weighed when grouping
 
+_CHARACTERISTICS_LEGEND = (
+    "The signal's characteristics are in `signal.characteristics` when available, and each "
+    "listed event carries its own in `events[].characteristics` (aggregated from the reports "
+    "it already contains):\n"
+    "- type   — WHAT happened (the kind of occurrence, e.g. air/drone strike, shelling, "
+    "armed clash, attack on civilians, flood, epidemic, displacement).\n"
+    "- places — WHERE: the specific places named, most specific first (town/camp/landmark, "
+    "else district, else state), not just the country.\n"
+    "- occurredAt — WHEN the occurrence happened (not when the report was filed).\n"
+    "- actors — WHO: the named parties/forces involved and their target, if stated.\n"
+    "- scale  — casualties or numbers affected, if given.\n"
+    "When `signal.characteristics` is absent, read these same characteristics from the "
+    "signal text. A `type` of \"none\" marks a roundup / analysis / no specific occurrence.\n\n"
+)
 SAME_EVENT_INSTRUCTIONS = (
     "`signal` is one new report (an X post, alert or database row) from a crisis "
-    "monitoring feed. `events` lists recent events already known for the same area, "
-    "each with a short summary built from the reports it already contains. Which "
-    "listed event is `signal` reporting on? Pick the event that describes the SAME "
-    "real-world occurrence (same thing happening, same place, same time). A later "
-    "update, a different wording, a different source or a different detail about the "
-    "same occurrence still counts as the same event. Pick `none` when the report is "
-    "about a different occurrence, a roundup of many occurrences, or no specific occurrence."
+    "monitoring feed. `events` lists recent events already known for the same area.\n\n"
+    + _CHARACTERISTICS_LEGEND
+    + "Pick the listed event that is reporting on the SAME real-world occurrence: its "
+    "characteristics must line up — the same `type`, overlapping `places` (the same specific "
+    "place, not merely the same state), the same `occurredAt`, and, where both state them, the "
+    "same `actors` and target. A later update, different wording, a different source, or an "
+    "extra detail about that same occurrence still counts as the same event.\n\n"
+    "Pick `none` when the characteristics point to a DIFFERENT occurrence — the same `type` "
+    "but a different place or time, a different actor's action, a roundup of many occurrences, "
+    "or no specific occurrence. The same actor, or the same kind of attack in another place or "
+    "on another day, is NOT the same event."
 )
 MATCHES_ANY_INSTRUCTIONS = (
-    "Does `signal` report on the same real-world occurrence as at least one of the "
-    "events listed in `events`?"
+    _CHARACTERISTICS_LEGEND
+    + "Does `signal` report on the same real-world occurrence as at least one of the events "
+    "listed in `events` — i.e. their characteristics line up on type, places and occurredAt "
+    "(and actors/target where stated), not merely the same kind of event in a different place "
+    "or on a different day?"
 )
 MATCHES_ANY_CRITERIA = {
-    "true": "The report is about an occurrence that one of the listed events already describes.",
-    "false": "The report is about a different occurrence, or is a roundup, analysis or general statement.",
+    "true": "An event in `events` already describes the same occurrence: its what/where/when "
+    "(and, where stated, actors/target) line up with the signal's.",
+    "false": "Every listed event is a different occurrence (same kind of thing elsewhere or at "
+    "another time, a different actor's action), or the signal is a roundup, analysis or general statement.",
 }
 # Copied from clear-pipeline/providers/jev.py so the lab's relevance gate matches production.
 RELEVANT_INSTRUCTIONS = (
@@ -118,7 +141,10 @@ RELEVANT_CRITERIA = {
     "false": "Routine news, analysis or opinion, a retrospective/anniversary, a "
     "forecast or warning with no event yet, or an unrelated topic.",
 }
-NONE_CRITERION = "A different occurrence from every event listed, or no specific occurrence."
+NONE_CRITERION = (
+    "A different occurrence from every event listed — a different what, where, when or actor — "
+    "or no specific occurrence."
+)
 
 
 # ── Jev transport (shape copied from clear-pipeline/providers/jev.py) ─────────
@@ -211,6 +237,40 @@ class ReplayEvent:
             parts.append(f"latest: {latest}")
         return " · ".join(p for p in parts if p)
 
+    def characteristics(self, chars_map: dict[str, dict]) -> dict | None:
+        """Aggregate the event's member-signal characteristics for the grouper's
+        state: the first real `type`, the de-duped union of `places`/`actors`,
+        the earliest `occurredAt`, and the first stated `scale`. None when no
+        member has been characterised (characterize.py not run, or all failed)."""
+        members = [chars_map[s["id"]] for s in self.signals if s["id"] in chars_map]
+        if not members:
+            return None
+        places: list[str] = []
+        actors: list[str] = []
+        occurred: list[str] = []
+        kind: str | None = None
+        scale: str | None = None
+        for m in members:
+            if kind is None and m.get("type") not in (None, "", "none"):
+                kind = m["type"]
+            for p in m.get("places") or []:
+                if p not in places:
+                    places.append(p)
+            for a in m.get("actors") or []:
+                if a not in actors:
+                    actors.append(a)
+            if m.get("occurredAt"):
+                occurred.append(m["occurredAt"])
+            if scale is None and m.get("scale"):
+                scale = m["scale"]
+        return {
+            "type": kind or members[0].get("type"),
+            "places": places,
+            "actors": actors,
+            "occurredAt": min(occurred) if occurred else None,
+            "scale": scale,
+        }
+
     def to_json(self, hierarchy: Hierarchy) -> dict:
         sev = [s.get("severity") for s in self.signals if s.get("severity") is not None]
         return {
@@ -234,6 +294,31 @@ def place_name(signal: dict, hierarchy: Hierarchy) -> str | None:
     if loc.get("level") is not None and loc["level"] <= 2:
         return loc.get("name")
     return hierarchy.name(signal.get("admin2Id")) or hierarchy.name(signal.get("admin1Id")) or loc.get("name")
+
+
+def load_characteristics(day: dict) -> dict[str, dict]:
+    """Per-signal characteristics from characterize.py, keyed by signal id.
+    Empty (with a hint) when the file is absent — grouping still runs, the model
+    just falls back to reading characteristics from the signal text."""
+    path = DATA / day["country"] / f"{day['date']}.characteristics.json"
+    if not path.exists():
+        print(
+            f"  note: {path.name} not found — run characterize.py to feed structured "
+            "signal characteristics into grouping (falling back to text only)"
+        )
+        return {}
+    return json.loads(path.read_text()).get("signals", {})
+
+
+def _event_state(key: str, ev: ReplayEvent, chars_map: dict[str, dict]) -> dict:
+    """One event's entry in the grouper's state: its id, rule-built summary, and
+    (when any member is characterised) its aggregated characteristics to compare
+    against the signal's."""
+    entry = {"id": key, "summary": ev.summary()}
+    chars = ev.characteristics(chars_map)
+    if chars is not None:
+        entry["characteristics"] = chars
+    return entry
 
 
 def candidates_for(signal: dict, events: list[ReplayEvent], window: timedelta, cap: int, scope: str = "state") -> list[ReplayEvent]:
@@ -271,6 +356,7 @@ def run_jev(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayE
     decisions: dict[str, dict] = {}
     counter = 0
     total = len(day["signals"])
+    chars_map = load_characteristics(day)
 
     for i, signal in enumerate(day["signals"], 1):
         if signal.get("retracted"):
@@ -281,17 +367,21 @@ def run_jev(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayE
         keys = {f"e{n}": ev for n, ev in enumerate(cands, 1)}
         text = " ".join(filter(None, [signal.get("title"), signal.get("text")])) or "unknown"
 
+        sig_signal = {
+            "text": text,
+            "publishedAt": signal["publishedAt"],
+            "location": loc_name,
+            "source": signal.get("source"),
+        }
+        sig_chars = chars_map.get(signal["id"])
+        if sig_chars is not None:
+            sig_signal["characteristics"] = sig_chars
         body = {
             "model": params["model"],
             "state": {
                 "text": text,
-                "signal": {
-                    "text": text,
-                    "publishedAt": signal["publishedAt"],
-                    "location": loc_name,
-                    "source": signal.get("source"),
-                },
-                "events": [{"id": k, "summary": ev.summary()} for k, ev in keys.items()],
+                "signal": sig_signal,
+                "events": [_event_state(k, ev, chars_map) for k, ev in keys.items()],
             },
             "questions": {
                 "relevant": {"type": "noul", "instructions": RELEVANT_INSTRUCTIONS, "criteria": RELEVANT_CRITERIA},

@@ -342,12 +342,16 @@ function stateOf(s) {
   if (a1) return a1.name;
   return (s.location && s.location.level === 1) ? s.location.name : 'Country only (no state)';
 }
+// One fixed order for signals and cards, the same in every layer: time, then signal id. Ties are common
+// (ACLED is date only, so all its rows sit at 00:00) and would otherwise fall back to each layer's file order.
+const bySig = (a, b) => a.publishedAt.localeCompare(b.publishedAt) || a.id.localeCompare(b.id);
+const byCard = (a, b) => bySig(a.signals[0], b.signals[0]);   // a card sits at its earliest signal
 function cards(name = current) {
   const layer = layers[name];
   if (!layer) return [];
   const out = [], placed = new Set();
   for (const ev of layer.events) {
-    const sigs = ev.signalIds.map(id => sigById.get(id)).filter(Boolean).sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+    const sigs = ev.signalIds.map(id => sigById.get(id)).filter(Boolean).sort(bySig);
     if (!sigs.length) continue;
     sigs.forEach(s => placed.add(s.id));
     const sev = ev.severity ?? Math.max(-1, ...sigs.map(s => s.severity ?? -1));
@@ -361,7 +365,7 @@ function cards(name = current) {
     out.push({ key: null, title: s.title, location: (s.location || {}).name || '?', severity: s.severity ?? null, types: s.glideCode ? [s.glideCode] : [],
                signals: [s], at: s.publishedAt, dropped: true, outcome: d.outcome || 'not in any event' });
   }
-  return out.sort((a, b) => a.at.localeCompare(b.at));
+  return out.sort(byCard);
 }
 function mergeOf() {   // signal id → merge number (1-based), for badges
   const m = new Map();
@@ -726,7 +730,7 @@ function compareGroups(L, R) {
   // Shape of one side: its events as sorted id lists, dropped signals marked. Equal shapes = the layers agree.
   const shape = (cs, drops) => cs.map(c => (drops && c.dropped ? 'd:' : '') + c.signals.map(s => s.id).sort().join(',')).sort().join('|');
   return [...groups.values()].map(g => {
-    const sigs = [...g.ids].map(id => sigById.get(id)).sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+    const sigs = [...g.ids].map(id => sigById.get(id)).sort(bySig);
     return { ...g, sigs, at: sigs[0].publishedAt, nL: g.L.length, nR: g.R.length,
              same: shape(g.L, true) === shape(g.R, true), sameGrouping: shape(g.L) === shape(g.R) };
   });
@@ -764,8 +768,9 @@ function renderCompare(q, merges, camps) {
 
   const show = document.getElementById('cmpShow').value, order = document.getElementById('cmpOrder').value;
   const shown = groups.filter(g => (show === 'all' || (show === 'grouping' ? !g.sameGrouping : !g.same)) && g.sigs.some(s => matches(s, q)));
-  shown.sort(order === 'time' ? (a, b) => a.at.localeCompare(b.at)
-    : (a, b) => Math.abs(b.nL - b.nR) - Math.abs(a.nL - a.nR) || b.sigs.length - a.sigs.length || a.at.localeCompare(b.at));
+  const byGroup = (a, b) => bySig(a.sigs[0], b.sigs[0]);
+  shown.sort(order === 'time' ? byGroup
+    : (a, b) => Math.abs(b.nL - b.nR) - Math.abs(a.nL - a.nR) || b.sigs.length - a.sigs.length || byGroup(a, b));
   if (!shown.length) { el.innerHTML = `<div class="empty">${groups.length ? 'Nothing to show with these filters.' : 'No signals.'}</div>`; return; }
 
   el.innerHTML = shown.map(g => {
@@ -785,7 +790,7 @@ function renderCompare(q, merges, camps) {
   }).join('');
 }
 function cmpSide(name, cs, num, merges, camps) {
-  const evs = cs.filter(c => !c.dropped).sort((a, b) => a.at.localeCompare(b.at)), drops = cs.filter(c => c.dropped);
+  const evs = cs.filter(c => !c.dropped).sort(byCard), drops = cs.filter(c => c.dropped);
   const row = (s, c) => `<tr data-sig="${s.id}" class="${selected.has(s.id) ? 'sel' : ''} ${c.dropped ? 'dropped' : ''} ${open.has(s.id) ? 'open' : ''}">
       <td class="ck"><input type="checkbox" data-act="sel" data-sig="${s.id}" ${selected.has(s.id) ? 'checked' : ''} aria-label="select"></td>
       <td class="mono"><span class="sn">${num.get(s.id)}</span>${hm(s.publishedAt)}</td>
@@ -889,7 +894,7 @@ function openMap(k) {
   if (!c) return;
   mapOpener = document.activeElement;
   document.getElementById('mtitle').textContent = c.title;
-  const sigs = [...c.signals].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+  const sigs = [...c.signals].sort(bySig);
   document.getElementById('mbody').innerHTML = mapSvg(sigs, 960, 600, true) +
     `<div class="legend">Numbers are the card's rows. Pin = exact point; shaded area = the signal only resolved to that district or state.</div>`;
   document.getElementById('modal').hidden = false;

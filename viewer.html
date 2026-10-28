@@ -99,11 +99,16 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .jlist .row .what small{display:block;color:var(--muted)}
 .jlist .empty{padding:10px 14px;color:var(--muted);font-size:13px}
 /* Compare tab: wider page, one card per group of signals, the two layers as columns. */
+body.wide #sum,body.wide .layerpick{display:none}   /* Compare picks both layers and shows their numbers per side */
 body.wide .wrap,body.wide .tray .in{max-width:1640px}
 .cmpsum{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin:0 0 14px;overflow:hidden}
-.cmpsum table{width:auto;min-width:min(520px,100%)}
-.cmpsum td,.cmpsum th{font-variant-numeric:tabular-nums}
-.cmpsum td.n{font-family:var(--font-mono);text-align:right;white-space:nowrap}
+.cmphead{display:grid;grid-template-columns:1fr 1fr}
+.cside{min-width:0;padding:12px;border-left:1px solid var(--line)}
+.cside:first-child{border-left:0}
+.cside > label{display:flex;gap:8px;align-items:center;font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.cside > label select{font-size:15px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--fg)}
+.cside .sum{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin:10px 0 0}
+.cside .sum div{background:var(--bg)}
 .cmpsum p{margin:0;padding:8px 10px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
 .cmp{display:grid;grid-template-columns:1fr 1fr}
 .cmp > .side{min-width:0;border-left:1px solid var(--line)}
@@ -117,7 +122,7 @@ body.wide .wrap,body.wide .tray .in{max-width:1640px}
 .ev td.txt{min-width:220px}
 .sn{display:inline-block;min-width:22px;text-align:center;font-family:var(--font-mono);font-size:11px;border:1px solid var(--line);border-radius:3px;padding:0 3px;margin-right:6px;color:var(--fg)}
 .chip.diff{background:var(--warn);color:#fff}
-@media (max-width:760px){.cmp{grid-template-columns:1fr}.cmp > .side{border-left:0;border-top:1px solid var(--line)}}
+@media (max-width:760px){.cmp,.cmphead{grid-template-columns:1fr}.cside{border-left:0;border-top:1px solid var(--line)}.cside:first-child{border-top:0}.cmp > .side{border-left:0;border-top:1px solid var(--line)}}
 .export{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}
 .msg{color:var(--good);font-size:13px}
 .empty{color:var(--muted);padding:40px 0;text-align:center}
@@ -167,7 +172,7 @@ td.loc .sub{font-size:12px;margin-top:2px}
   </div>
   <div class="setup">
     <label>Day <select id="day"></select></label>
-    <label>Layer <select id="layer"></select></label>
+    <label class="layerpick">Layer <select id="layer"></select></label>
     <label>Judge <input id="judge" type="text" size="10" placeholder="your name"></label>
   </div>
 </header>
@@ -210,13 +215,19 @@ td.loc .sub{font-size:12px;margin-top:2px}
 </section>
 
 <section class="panel" id="panel-compare" hidden>
-  <div class="howto"><b>How two layers grouped the same signals.</b> The right column is the <b>Layer</b> chosen at the top; pick the left one below. Each card is a set of signals that either layer put into one event, so both columns hold the same signals: read across to see what one layer merged, split or dropped that the other didn't. Row numbers match across the columns. Tick <b>select</b> and use the bar at the bottom to record your own answer, as on tab 2.</div>
+  <div class="howto"><b>How two layers grouped the same signals.</b> Pick the two layers to compare below; each one's numbers sit above its column. Each card is a set of signals that either layer put into one event, so both columns hold the same signals: read across to see what one layer merged, split or dropped that the other didn't. Row numbers match across the columns. Tick <b>select</b> and use the bar at the bottom to record your own answer, as on tab 2.</div>
   <div class="bar">
-    <label>Left <select id="vs"></select></label>
     <label>Show <select id="cmpShow"><option value="diff">groups the layers disagree on</option><option value="grouping">grouping differences only (not drops)</option><option value="all">every group</option></select></label>
     <label>Order <select id="cmpOrder"><option value="diff">biggest difference first</option><option value="time">by time</option></select></label>
+    <button class="ghost" id="cmpSwap" type="button" title="Swap left and right">⇄ Swap sides</button>
   </div>
-  <div id="cmpsum"></div>
+  <div class="cmpsum">
+    <div class="cmphead">
+      <div class="cside"><label>Left <select id="vs"></select></label><div class="sum" id="sumL"></div></div>
+      <div class="cside"><label>Right <select id="vsR"></select></label><div class="sum" id="sumR"></div></div>
+    </div>
+    <p id="cmpagree"></p>
+  </div>
   <div id="compare"></div>
 </section>
 </div>
@@ -708,6 +719,9 @@ function pickVs(want) {
   vs = names.includes(want) ? want : names.includes('clear-as-run') ? 'clear-as-run' : names[0] || null;
   sel.innerHTML = names.map(n => `<option>${esc(n)}</option>`).join('');
   sel.value = vs || '';
+  const selR = document.getElementById('vsR');
+  selR.innerHTML = Object.keys(layers).filter(n => n !== vs).map(n => `<option>${esc(n)}</option>`).join('');
+  selR.value = current || '';
   if (!PACK) document.querySelector('.tab[data-tab="compare"]').hidden = !vs;
 }
 function pairKey(a, b) { return a < b ? `${a} ${b}` : `${b} ${a}`; }
@@ -745,26 +759,25 @@ function srcChips(s) { return `<span class="chip src">${esc(SRC[s.source] || s.s
 function srcLink(s) { return s.url && s.url.startsWith('http') ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ''; }
 
 function renderCompare(q, merges, camps) {
-  const el = document.getElementById('compare'), sum = document.getElementById('cmpsum');
-  if (!vs) { sum.innerHTML = ''; el.innerHTML = '<div class="empty">This day has only one layer. Run <code>replay.py</code> to add another.</div>'; return; }
+  const el = document.getElementById('compare'), agree = document.getElementById('cmpagree');
+  if (!vs) { for (const id of ['sumL', 'sumR']) document.getElementById(id).innerHTML = ''; agree.textContent = ''; el.innerHTML = '<div class="empty">This day has only one layer. Run <code>replay.py</code> to add another.</div>'; return; }
   const L = cards(vs), R = cards(current), groups = compareGroups(L, R);
   const pL = pairsOf(L), pR = pairsOf(R), both = [...pL].filter(k => pR.has(k)).length;
   const judged = judgedPairs(), right = p => judged.filter(j => p.has(j.k) === j.same).length;
 
-  // Summary: the shape of each layer, then where they agree.
-  const stats = list => {
+  // Summary: each layer's shape above its own column, then where they agree.
+  const tiles = (list, p) => {
     const evs = list.filter(c => !c.dropped), n = evs.reduce((a, c) => a + c.signals.length, 0);
-    return [evs.length, (evs.length ? n / evs.length : 0).toFixed(2), evs.filter(c => c.signals.length > 1).length,
-            list.length - evs.length, evs.filter(c => (c.severity ?? 0) >= 4).length];
+    const t = [[day.signals.length, 'signals that day'], [evs.length, 'events'],
+      [(evs.length ? n / evs.length : 0).toFixed(2), 'merge ratio (baseline 1.2)'], [evs.filter(c => c.signals.length > 1).length, 'events with 2+ signals'],
+      [list.length - evs.length, 'signals dropped'], [evs.filter(c => (c.severity ?? 0) >= 4).length, 'events at severity ≥ 4']];
+    if (judged.length) t.push([`${right(p)}/${judged.length}`, 'your judged pairs it gets right']);
+    return t.map(([b, l]) => `<div><b>${b}</b><span>${l}</span></div>`).join('');
   };
-  const sL = stats(L), sR = stats(R);
-  const rows = [['events', 0], ['merge ratio', 1], ['events with 2+ signals', 2], ['signals dropped', 3], ['events at severity ≥ 4', 4]]
-    .map(([t, i]) => [t, sL[i], sR[i]]);
-  if (judged.length) rows.push([`your judged pairs it gets right`, `${right(pL)}/${judged.length}`, `${right(pR)}/${judged.length}`]);
+  document.getElementById('sumL').innerHTML = tiles(L, pL);
+  document.getElementById('sumR').innerHTML = tiles(R, pR);
   const differ = groups.filter(g => !g.same).length, regroup = groups.filter(g => !g.sameGrouping).length;
-  sum.innerHTML = `<div class="cmpsum"><div class="tblwrap"><table><thead><tr><th></th><th style="text-align:right">${esc(vs)}</th><th style="text-align:right">${esc(current)}</th></tr></thead><tbody>
-    ${rows.map(([t, a, b]) => `<tr><td>${t}</td><td class="n">${a}</td><td class="n">${b}</td></tr>`).join('')}</tbody></table></div>
-    <p>Signal pairs put in one event: ${both} by both, ${pL.size - both} only by ${esc(vs)}, ${pR.size - both} only by ${esc(current)}. ${groups.length} groups: ${groups.length - differ} identical, ${regroup} grouped differently, ${differ - regroup} differ only in what was dropped.</p></div>`;
+  agree.textContent = `Signal pairs put in one event: ${both} by both, ${pL.size - both} only by ${vs}, ${pR.size - both} only by ${current}. ${groups.length} groups: ${groups.length - differ} identical, ${regroup} grouped differently, ${differ - regroup} differ only in what was dropped.`;
 
   const show = document.getElementById('cmpShow').value, order = document.getElementById('cmpOrder').value;
   const shown = groups.filter(g => (show === 'all' || (show === 'grouping' ? !g.sameGrouping : !g.same)) && g.sigs.some(s => matches(s, q)));
@@ -805,7 +818,10 @@ function cmpSide(name, cs, num, merges, camps) {
     ${drops.length ? block('dropped', `<b>Not in any event</b>`, drops.map(c => row(c.signals[0], c)).join('')) : ''}</div>`;
 }
 for (const id of ['cmpShow', 'cmpOrder']) document.getElementById(id).addEventListener('input', render);
-document.getElementById('vs').addEventListener('change', e => { vs = e.target.value; render(); });
+document.getElementById('vs').addEventListener('change', e => { pickVs(e.target.value); render(); });
+function setRight(name) { current = name; document.getElementById('layer').value = name; }
+document.getElementById('vsR').addEventListener('change', e => { setRight(e.target.value); pickVs(vs); render(); });
+document.getElementById('cmpSwap').addEventListener('click', () => { const l = vs; vs = current; setRight(l); pickVs(vs); render(); });
 
 function renderTray() {
   const n = selected.size;

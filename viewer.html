@@ -376,7 +376,10 @@ function hl(raw, places, colours) {
   const surf = [...new Set(places)].filter(p => p.length > 1).sort((a, b) => b.length - a.length);
   if (!surf.length) return esc(raw);
   const alt = surf.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\s\-‐–]+/g, '[\\s\\-‐–]+')).join('|');
-  const re = new RegExp(`(?<!\\p{L})(?:${alt})(?!\\p{L})`, 'giu');
+  // Whole words only; browsers without regex lookbehind (Safari < 16.4) fall back to plain matching
+  // rather than throwing and blanking the page.
+  let re;
+  try { re = new RegExp(`(?<!\\p{L})(?:${alt})(?!\\p{L})`, 'giu'); } catch (e) { re = new RegExp(alt, 'gi'); }
   let out = '', i = 0;
   for (const m of raw.matchAll(re)) {
     const ci = colours && colours.get(placeKey(m[0]));

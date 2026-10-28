@@ -99,9 +99,11 @@ Run these from the lab folder. Swap in the country and date you want.
    ```bash
    python3 fetch_day.py --country sudan --date 2026-10-20
    ```
-2. **Run the algorithms.** Each run adds one layer. `naive-state` needs no
-   model. Jev responses are cached, so re-runs with unchanged prompts are free.
-   Add `--limit 20` for a cheap smoke test.
+2. **Run the algorithms.** Each run adds one layer. The
+   [grouping algorithms](#grouping-algorithms) section says what each `--algo`
+   does. `naive-state` and `v2-*` need no model. Jev responses and embeddings
+   are cached, so re-runs with unchanged prompts are free. Add `--limit 20` for
+   a cheap smoke test.
    ```bash
    python3 replay.py --country sudan --date 2026-10-20 --algo naive-state
    ```
@@ -213,9 +215,33 @@ Run these from the lab folder. Swap in the country and date you want.
    a bare `none` option is unreliable), and the production relevance gate. The
    join rule uses all three and every probability is written to the layer.
 
+## Grouping algorithms
+
+Every algorithm walks the day's signals once, in publication order, and for
+each one either joins an event it has already built that day or starts a new
+one. No decision is revisited. Replayed algorithms start the day with no open
+events. The model-free ones reuse CLEAR's relevance verdict, so they drop
+exactly the signals CLEAR dropped; Jev asks its own relevance question.
+<http://localhost:8765/layer-key> shows the same breakdown with each layer's
+settings and the day's numbers.
+
+| `--algo` | Model | How it decides | Main options |
+|---|---|---|---|
+| *(none: `clear-as-run`)* | as in production | Written by `fetch_day.py` from what CLEAR stored, not replayed. Production's V2 rule: key = (district, type family), join the matching open event (newest signal under 7 days old) with the newest signal; a signal with no district always starts its own event. Carries events from earlier days. | |
+| `v2-replay` | none | Production's V2 rule replayed on the day: key = (district, `type_level_2` of the glide code), join the open event in the window with that key and the newest signal, no district → new event (`no-district`). | `--window-hours`, `--type-level` |
+| `v2-gazetteer` | none | `v2-replay`, but a signal that only resolves to a state or the country is first promoted to a district: the first place it names (from `translate.py`, in mention order) that matches exactly one district, or a named point inside one, in its state. Names match on consonant skeletons (Tandilti / Tendelti → `tndlt`). Needs the translations file. | `--type-level 1` keys on the top-level family (conflict) |
+| `naive-state` | none | Key = (state, exact glide code); join the most recent open event in the window with that key. | `--window-hours` |
+| `jev-v1` | Jev | Candidates = open events in the window in the signal's state (plus country-level ones), newest first, each shown as a rule-built summary (place · first title · count and span · latest title). One Jev call asks which event (a Choice over the candidates plus `none`), whether it matches any (yes/no), and whether it is relevant (the production gate). Join the winner when matches-any, the winner's probability and its lead over the runner-up all pass; otherwise new event, keeping candidates above the link threshold as links (`new-linked`). | `--abs-threshold`, `--margin`, `--any-threshold`, `--link-threshold`, `--relevance-threshold`, `--window-hours`, `--max-candidates`, `--scope` |
+| `embed-v1` | Voyage embeddings | Same candidates as `jev-v1`. A candidate scores the cosine similarity between the signal's embedding and its closest member signal (single link). Join the best when it reaches the threshold and beats the runner-up by the margin; otherwise new event, with near misses kept as links. | `--sim-threshold`, `--sim-margin`, `--sim-link-threshold`, `--embed-dims`, `--scope` |
+
+`--scope country` (`jev-v1`, `embed-v1`) offers the state's open events first,
+then every other state's, newest first, up to `--max-candidates`. `--tag` names
+the layer, so one algorithm with different options gives several layers
+(`jev-v1-strict`, `jev-v1-country`, …).
+
 ## Layers
 
-Each layer answers one question. Compare it with the layer named in
+Each layer is one run of an algorithm above, and answers one question. Compare it with the layer named in
 *against*; everything else is held the same. The model-free layers reuse
 CLEAR's own relevance verdict, so they drop exactly the signals CLEAR dropped.
 

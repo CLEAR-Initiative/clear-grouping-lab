@@ -151,7 +151,7 @@ code{font-family:var(--font-mono);font-size:12.5px}
     <button class="ghost" id="btnClear">Clear my judgments</button>
     <span class="msg" id="exportMsg"></span>
   </div>
-  <div class="howto">Judgments save in this browser per day as you go. <b>Download</b> writes <code id="fname">&lt;date&gt;.&lt;judge&gt;.json</code>; move it to <code id="fdir">judgments/&lt;country&gt;/</code> and run <code>python3 score.py --country … --date … --all</code>.</div>
+  <div class="howto" id="howtoSave">Judgments save in this browser per day as you go. <b>Download</b> writes <code id="fname">&lt;date&gt;.&lt;judge&gt;.json</code>; move it to <code id="fdir">judgments/&lt;country&gt;/</code> and run <code>python3 score.py --country … --date … --all</code>.</div>
   <div id="jlists"></div>
 </section>
 </div>
@@ -212,10 +212,18 @@ function cardByKey(k) {
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────
+// A judging pack (make_pack.py) embeds the files in window.LAB_PACK so the page opens from
+// disk with no server; otherwise they are fetched from the folder the page is served from.
+const PACK = window.LAB_PACK || null;
+if (PACK) document.getElementById('howtoSave').innerHTML = `Your answers save in this browser as you go, so you can close the page and come back. When you're done, press <b>Download judgments</b> and send <code id="fname"></code> to ${esc(PACK.sendTo || 'whoever sent you this page')}.`;
+async function getJson(path) {
+  if (PACK) return PACK.files[path] || null;
+  const r = await fetch(path);
+  return r.ok ? r.json() : null;
+}
 let index = {}, sigById = new Map();
 async function boot() {
-  const r = await fetch('layers/index.json');
-  index = r.ok ? await r.json() : {};
+  index = await getJson('layers/index.json') || {};
   const daySel = document.getElementById('day');
   const days = Object.keys(index).sort();
   const want = new URLSearchParams(location.search).get('day');
@@ -227,14 +235,13 @@ async function boot() {
 }
 async function loadDay(spec) {
   const [country, date] = spec.split('/');
-  const r = await fetch(`data/${country}/${date}.json`);
-  if (!r.ok) { document.getElementById('multi').innerHTML = `<div class="empty">No day file at <code>data/${esc(country)}/${esc(date)}.json</code>. Run <code>fetch_day.py</code> first.</div>`; return; }
-  day = await r.json();
+  day = await getJson(`data/${country}/${date}.json`);
+  if (!day) { document.getElementById('multi').innerHTML = `<div class="empty">No day file at <code>data/${esc(country)}/${esc(date)}.json</code>. Run <code>fetch_day.py</code> first.</div>`; return; }
   sigById = new Map(day.signals.map(s => [s.id, s]));
   layers = {};
   for (const name of index[spec] || []) {
-    const lr = await fetch(`layers/${country}/${date}.${name}.json`);
-    if (lr.ok) layers[name] = await lr.json();
+    const layer = await getJson(`layers/${country}/${date}.${name}.json`);
+    if (layer) layers[name] = layer;
   }
   const sel = document.getElementById('layer');
   sel.innerHTML = Object.keys(layers).map(n => `<option>${esc(n)}</option>`).join('');
@@ -246,7 +253,7 @@ async function loadDay(spec) {
   syncUrl();
   render();
 }
-function syncUrl() { if (day) history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}`); }
+function syncUrl() { if (day) try { history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}`); } catch (e) {} }
 
 // ── Card model ───────────────────────────────────────────────────────────
 function stateOf(s) {
@@ -409,7 +416,8 @@ function sigLabel(id) {
 function renderJudgments() {
   const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
   document.getElementById('fname').textContent = `${day.date}.${name}.json`;
-  document.getElementById('fdir').textContent = `judgments/${day.country}/`;
+  const fdir = document.getElementById('fdir');  // absent in a pack, whose judges don't run score.py
+  if (fdir) fdir.textContent = `judgments/${day.country}/`;
   const cardRows = Object.entries(J.cards).filter(([, v]) => v.one || (v.out || []).length).map(([k, v]) => {
     const c = cardByKey(k), n = v.ids ? v.ids.length : c ? c.signals.length : '?', o = (v.out || []).length;
     return `<div class="row"><div class="what"><b>${esc(v.title || (c ? c.title : k))}</b><small>${esc(k.split('|')[0])} · ${v.one ? `${n - o} of ${n} signals are one event` : 'not answered'}${o ? ` · ${o} pulled out` : ''}</small></div>
@@ -520,7 +528,13 @@ document.getElementById('judge').addEventListener('input', e => { try { localSto
 
 document.getElementById('btnExport').addEventListener('click', () => {
   if (!day) return;
-  const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
+  const judge = document.getElementById('judge');
+  if (!judge.value.trim()) {
+    judge.value = (prompt('Your name, so each judge gets their own file:') || '').trim();
+    try { localStorage.setItem('judge', judge.value); } catch (x) {}
+    renderJudgments();  // the filename on this tab follows the name
+  }
+  const name = (judge.value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
   const { same, apart } = derived();
   const out = { country: day.country, date: day.date, name, createdAt: new Date().toISOString(), layersSeen: Object.keys(layers),
                 same, apart, campaigns: J.campaigns, notes: J.notes, cards: J.cards, merges: J.merges,

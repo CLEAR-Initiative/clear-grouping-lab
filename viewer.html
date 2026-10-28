@@ -215,6 +215,7 @@ function cardByKey(k) {
 // A judging pack (make_pack.py) embeds the files in window.LAB_PACK so the page opens from
 // disk with no server; otherwise they are fetched from the folder the page is served from.
 const PACK = window.LAB_PACK || null;
+if (PACK) document.getElementById('howtoSave').innerHTML = `Your answers save in this browser as you go, so you can close the page and come back. When you're done, press <b>Download judgments</b> and send <code id="fname"></code> to ${esc(PACK.sendTo || 'whoever sent you this page')}.`;
 async function getJson(path) {
   if (PACK) return PACK.files[path] || null;
   const r = await fetch(path);
@@ -415,8 +416,8 @@ function sigLabel(id) {
 function renderJudgments() {
   const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
   document.getElementById('fname').textContent = `${day.date}.${name}.json`;
-  document.getElementById('fdir').textContent = `judgments/${day.country}/`;
-  if (PACK) document.getElementById('howtoSave').innerHTML = `Your answers save in this browser as you go, so you can close the page and come back. When you're done, press <b>Download judgments</b> and send <code>${esc(day.date)}.${esc(name)}.json</code> to ${esc(PACK.sendTo || 'whoever sent you this page')}.`;
+  const fdir = document.getElementById('fdir');  // absent in a pack, whose judges don't run score.py
+  if (fdir) fdir.textContent = `judgments/${day.country}/`;
   const cardRows = Object.entries(J.cards).filter(([, v]) => v.one || (v.out || []).length).map(([k, v]) => {
     const c = cardByKey(k), n = v.ids ? v.ids.length : c ? c.signals.length : '?', o = (v.out || []).length;
     return `<div class="row"><div class="what"><b>${esc(v.title || (c ? c.title : k))}</b><small>${esc(k.split('|')[0])} · ${v.one ? `${n - o} of ${n} signals are one event` : 'not answered'}${o ? ` · ${o} pulled out` : ''}</small></div>

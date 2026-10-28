@@ -62,7 +62,10 @@ def load_judgments(country: str, date: str, name: str | None, day_ids: set[str])
     files = []
     for f in sorted(folder.glob("*.json")):
         m = JUDGMENT_FILE.match(f.name)
-        if m and m.group(1) <= date <= (m.group(2) or m.group(1)) and (name is None or m.group(3) == name):
+        if not m:
+            if f.name.startswith(date):
+                print(f"note: skipping {f.name}; expected <date>.<judge>.json or <from>..<to>.<judge>.json", file=sys.stderr)
+        elif m.group(1) <= date <= (m.group(2) or m.group(1)) and (name is None or m.group(3) == name):
             files.append(f)
     if not files:
         return None

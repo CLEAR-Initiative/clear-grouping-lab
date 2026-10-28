@@ -49,8 +49,9 @@ def main() -> None:
     for name in names:
         files[f"layers/{spec}.{name}.json"] = json.loads((LAYERS / args.country / f"{args.date}.{name}.json").read_text())
 
-    # `<\/` keeps signal text containing "</script>" from closing the tag early.
-    blob = json.dumps({"sendTo": args.send_to, "files": files}, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    # Every `<` becomes \u003c (it only occurs inside JSON strings), so signal text such as
+    # "</script>" or "<!--<script" can't end or derail the inline script.
+    blob = json.dumps({"sendTo": args.send_to, "files": files}, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     viewer = (LAB / "viewer.html").read_text()
     if viewer.count(MARKER) != 1:
         sys.exit("viewer.html no longer has exactly one inline <script>; update MARKER in make_pack.py")

@@ -38,6 +38,8 @@ def main() -> None:
     index_path = LAYERS / "index.json"
     known = json.loads(index_path.read_text()).get(spec, []) if index_path.exists() else []
     names = args.layers.split(",") if args.layers else known
+    if not names:
+        sys.exit(f"no layers for {spec} — run replay.py first; a pack without layers shows judges nothing")
     missing = [n for n in names if n not in known]
     if missing:
         sys.exit(f"unknown layer(s) for {spec}: {', '.join(missing)} (have: {', '.join(known) or 'none'})")

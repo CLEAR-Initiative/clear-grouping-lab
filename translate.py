@@ -144,6 +144,12 @@ def main() -> None:
                 print(f"  {n}/{len(signals)}")
 
     path = DATA / args.country / f"{args.date}.translations.json"
+    # Merge into an earlier run with the same model and prompt, so a --limit smoke test or a
+    # partly failed run never throws away translations the viewer and packs already use.
+    if path.exists():
+        prev = json.loads(path.read_text())
+        if prev.get("model") == model and prev.get("promptVersion") == PROMPT_VERSION:
+            out = {**prev.get("signals", {}), **out}
     write_json(path, {"model": model, "promptVersion": PROMPT_VERSION, "createdAt": now_iso(), "signals": out})
     langs: dict[str, int] = {}
     for e in out.values():

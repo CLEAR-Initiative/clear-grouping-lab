@@ -388,7 +388,11 @@ function mergeLayers(name, parts) {
   }
   return { ...parts[parts.length - 1][1], events: [...byId.values()], decisions };
 }
+// Date inputs fire on every edit, so loads can overlap; each one builds into locals and only the
+// newest commits, so the page never pairs one range's signals with another's layers or judgments.
+let loadSeq = 0;
 async function loadRange() {
+  const seq = ++loadSeq;
   const country = document.getElementById('country').value;
   let from = document.getElementById('from').value, to = document.getElementById('to').value || from;
   if (!from) from = to;
@@ -396,6 +400,7 @@ async function loadRange() {
   const dates = (DAYS[country] || []).filter(d => d >= from && d <= to);
   const files = await Promise.all(dates.map(d => getJson(`data/${country}/${d}.json`)));
   const got = dates.filter((d, i) => files[i]);
+  if (seq !== loadSeq) return;
   if (!got.length) {
     day = null;
     document.getElementById('multi').innerHTML = `<div class="empty">No day files for ${esc(country)} between ${esc(from)} and ${esc(to)}. Run <code>fetch_day.py</code> first.</div>`;
@@ -404,8 +409,24 @@ async function loadRange() {
   const seen = new Set(), signals = [];
   files.forEach((f, i) => f && f.signals.forEach(x => { if (!seen.has(x.id)) { seen.add(x.id); signals.push({ ...x, day: dates[i] }); } }));
   const last = files.filter(Boolean).pop();
+  // Optional extras: translate.py's English text + place names, fetch_geo.py's outlines for the maps.
+  const trs = await Promise.all(got.map(d => getJson(`data/${country}/${d}.translations.json`)));
+  const geo = await getJson(`data/${country}/geo.json`);
+  // A range shows only the layers run on every one of its days, so every layer groups the same signals.
+  const names = [...new Set(got.flatMap(d => index[`${country}/${d}`] || []))];
+  const full = names.filter(n => got.every(d => (index[`${country}/${d}`] || []).includes(n)));
+  const merged = {};
+  for (const name of full) {
+    const parts = (await Promise.all(got.map(async d => [d, await getJson(`layers/${country}/${d}.${name}.json`)]))).filter(([, l]) => l);
+    if (parts.length === got.length) merged[name] = mergeLayers(name, parts);
+  }
+  if (seq !== loadSeq) return;
+
   day = { country, date: got.length > 1 ? `${got[0]}..${got[got.length - 1]}` : got[0], dates: got, locations: last.locations, signals };
   sigById = new Map(day.signals.map(s => [s.id, s]));
+  TR = Object.assign({}, ...trs.map(t => (t || {}).signals || {}));
+  GEO = geo;
+  layers = merged;
   // Source filter: options are the day's exact source values (e.g. sudan-war-x), most signals first.
   const srcCounts = {};
   for (const s of day.signals) srcCounts[s.source] = (srcCounts[s.source] || 0) + 1;
@@ -413,18 +434,7 @@ async function loadRange() {
   srcSel.innerHTML = '<option value="">All sources</option>' + Object.entries(srcCounts).sort((a, b) => b[1] - a[1])
     .map(([v, n]) => `<option value="${esc(v)}">${esc(v)}${SRC[v] ? ` (${esc(SRC[v])})` : ''} · ${n}</option>`).join('');
   srcSel.value = srcCounts[wantSrc] ? wantSrc : '';
-  // Optional extras: translate.py's English text + place names, fetch_geo.py's outlines for the maps.
-  TR = Object.assign({}, ...(await Promise.all(got.map(d => getJson(`data/${country}/${d}.translations.json`)))).map(t => (t || {}).signals || {}));
   translationNote();
-  GEO = await getJson(`data/${country}/geo.json`);
-  // A range shows only the layers run on every one of its days, so every layer groups the same signals.
-  const names = [...new Set(got.flatMap(d => index[`${country}/${d}`] || []))];
-  const full = names.filter(n => got.every(d => (index[`${country}/${d}`] || []).includes(n)));
-  layers = {};
-  for (const name of full) {
-    const parts = (await Promise.all(got.map(async d => [d, await getJson(`layers/${country}/${d}.${name}.json`)]))).filter(([, l]) => l);
-    if (parts.length === got.length) layers[name] = mergeLayers(name, parts);
-  }
   rangeNote(names.filter(n => !layers[n]), dates.filter(d => !got.includes(d)));
   const sel = document.getElementById('layer');
   sel.innerHTML = Object.keys(layers).map(n => `<option>${esc(n)}</option>`).join('');

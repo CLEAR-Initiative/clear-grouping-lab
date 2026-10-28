@@ -111,7 +111,10 @@ def area_entry(geometry: dict, level: int) -> dict | None:
         return None
     xs = [p[0] for r in rings for p in r]
     ys = [p[1] for r in rings for p in r]
-    return {"l": level, "c": best[1], "bb": [min(xs), min(ys), max(xs), max(ys)], "r": rings}
+    bb = [min(xs), min(ys), max(xs), max(ys)]
+    # Every ring degenerate (zero area) → no centroid; the bbox centre keeps the viewer from crashing.
+    centre = best[1] or [round((bb[0] + bb[2]) / 2, 3), round((bb[1] + bb[3]) / 2, 3)]
+    return {"l": level, "c": centre, "bb": bb, "r": rings}
 
 
 def update_geo(country: str, *, refresh: bool = False) -> None:

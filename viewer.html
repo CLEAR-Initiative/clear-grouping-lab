@@ -32,6 +32,8 @@ select,input[type=text],input[type=search]{font:inherit;font-size:13px;border:1p
 .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .tab .n{font-family:var(--font-mono);font-size:11px;opacity:.8;margin-left:4px}
 .tabs input[type=search]{flex:0 1 220px;margin-left:8px}
+.tabs #src{flex:0 1 auto}
+.keylink{font-size:12px;padding-bottom:7px;color:var(--accent)}
 .progress{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
 button:focus-visible,input:focus-visible,select:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 section.panel{padding-block:16px}
@@ -174,6 +176,7 @@ td.loc .sub{font-size:12px;margin-top:2px}
   <div class="setup">
     <label>Day <select id="day"></select></label>
     <label class="layerpick">Layer <select id="layer"></select></label>
+    <a id="keyLink" class="keylink" href="layer-key/">What the layers do</a>
     <label>Judge <input id="judge" type="text" size="10" placeholder="your name"></label>
   </div>
 </header>
@@ -185,6 +188,7 @@ td.loc .sub{font-size:12px;margin-top:2px}
   <button class="tab" role="tab" data-tab="judg">3 · My judgments<span class="n" id="n-judg"></span></button>
   <button class="tab" role="tab" data-tab="compare">Compare layers<span class="n" id="n-compare"></span></button>
   <input type="search" id="q" placeholder="Filter by text or place">
+  <select id="src" aria-label="Filter by source" title="Show only signals from one source (exact source value)"><option value="">All sources</option></select>
   <span class="progress" id="progress"></span>
 </nav>
 
@@ -300,7 +304,7 @@ const PACK = window.LAB_PACK || null;
 if (PACK) document.getElementById('howtoSave').innerHTML = `Your answers save in this browser as you go, so you can close the page and come back. When you're done, press <b>Download judgments</b> and send <code id="fname"></code> to ${esc(PACK.sendTo || 'whoever sent you this page')}.`;
 async function getJson(path) {
   if (PACK) return PACK.files[path] || null;
-  const r = await fetch(path);
+  const r = await fetch(path, { cache: 'no-cache' });  // replay.py rewrites layers; always revalidate
   return r.ok ? r.json() : null;
 }
 let index = {}, sigById = new Map(), TR = {}, GEO = null;
@@ -323,6 +327,13 @@ async function loadDay(spec) {
   day = await getJson(`data/${country}/${date}.json`);
   if (!day) { document.getElementById('multi').innerHTML = `<div class="empty">No day file at <code>data/${esc(country)}/${esc(date)}.json</code>. Run <code>fetch_day.py</code> first.</div>`; return; }
   sigById = new Map(day.signals.map(s => [s.id, s]));
+  // Source filter: options are the day's exact source values (e.g. sudan-war-x), most signals first.
+  const srcCounts = {};
+  for (const s of day.signals) srcCounts[s.source] = (srcCounts[s.source] || 0) + 1;
+  const srcSel = document.getElementById('src'), wantSrc = new URLSearchParams(location.search).get('src') || srcSel.value;
+  srcSel.innerHTML = '<option value="">All sources</option>' + Object.entries(srcCounts).sort((a, b) => b[1] - a[1])
+    .map(([v, n]) => `<option value="${esc(v)}">${esc(v)}${SRC[v] ? ` (${esc(SRC[v])})` : ''} · ${n}</option>`).join('');
+  srcSel.value = srcCounts[wantSrc] ? wantSrc : '';
   // Optional extras: translate.py's English text + place names, fetch_geo.py's outlines for the maps.
   TR = ((await getJson(`data/${country}/${date}.translations.json`)) || {}).signals || {};
   GEO = await getJson(`data/${country}/geo.json`);
@@ -345,7 +356,9 @@ async function loadDay(spec) {
 function syncUrl() {
   if (!day) return;
   const cmp = tab === 'compare' && vs ? `&tab=compare&vs=${encodeURIComponent(vs)}` : '';
-  try { history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}${cmp}`); } catch (e) {}
+  const src = document.getElementById('src').value;
+  document.getElementById('keyLink').href = `layer-key/?day=${day.country}/${day.date}${current ? '#' + encodeURIComponent(current) : ''}`;
+  try { history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}${src ? '&src=' + encodeURIComponent(src) : ''}${cmp}`); } catch (e) {}
 }
 
 // ── Card model ───────────────────────────────────────────────────────────
@@ -390,6 +403,8 @@ function campOf() {
   return m;
 }
 function matches(s, q) {
+  const src = document.getElementById('src').value;
+  if (src && s.source !== src) return false;
   if (!q) return true;
   const t = TR[s.id] || {};
   const hay = `${s.title || ''} ${s.text || ''} ${t.title || ''} ${t.text || ''} ${(t.places || []).join(' ')} ${(s.location || {}).name || ''} ${stateOf(s)} ${s.source}`.toLowerCase();
@@ -585,7 +600,7 @@ function jevLine(s, name = current) {
   const d = ((layers[name] || {}).decisions || {})[s.id];
   if (!d || !d.outcome || d.outcome === 'dropped' && !d.candidates) return '';
   const cands = [...(d.candidates || [])].sort((a, b) => b.p - a.p);
-  const head = `${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}${d.matchesAny != null ? ` · matches any ${d.matchesAny}` : ''}${cands[0] ? ` · top ${cands[0].p}` : ''}`;
+  const head = `${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}${d.matchesAny != null ? ` · matches any ${d.matchesAny}` : ''}${d.promotedTo ? ` · placed in ${esc(d.promotedTo)} by name` : ''}${cands[0] ? ` · top ${cands[0].p}` : ''}`;
   if (!cands.length) return `<div class="jev">${esc(name)}: ${head}</div>`;
   return `<div class="jev"><details><summary>${esc(name)}: ${head} · ${cands.length} candidates</summary><ul>${cands.map(c => `<li>${c.p} · ${esc(c.summary)}</li>`).join('')}</ul></details></div>`;
 }
@@ -715,6 +730,7 @@ function renderJudgments() {
 // signals on both sides and shows how each layer split them. Hidden in packs, so judges aren't steered.
 let vs = null;
 if (PACK) document.querySelector('.tab[data-tab="compare"]').hidden = true;
+if (PACK) document.getElementById('keyLink').hidden = true;  // the key reads layer files from the server
 function pickVs(want) {
   const names = Object.keys(layers).filter(n => n !== current), sel = document.getElementById('vs');
   vs = names.includes(want) ? want : names.includes('clear-as-run') ? 'clear-as-run' : names[0] || null;
@@ -930,6 +946,7 @@ document.getElementById('tabs').addEventListener('click', e => {
   render();
 });
 for (const id of ['q', 'hideDoneMulti', 'showDropped', 'hideMerged', 'order']) document.getElementById(id).addEventListener('input', render);
+document.getElementById('src').addEventListener('change', () => { syncUrl(); render(); });
 document.getElementById('layer').addEventListener('change', e => { current = e.target.value; pickVs(vs); syncUrl(); render(); });
 document.getElementById('day').addEventListener('change', e => loadDay(e.target.value));
 document.getElementById('judge').addEventListener('input', e => { try { localStorage.setItem('judge', e.target.value); } catch (x) {} if (tab === 'judg') renderJudgments(); });

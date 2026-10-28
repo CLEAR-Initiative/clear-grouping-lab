@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layer Key</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Same tokens as viewer.html so the two read as one tool. */
+:root{
+  --bg:#f6f5f1; --surface:#ffffff; --fg:#1d2126; --muted:#5d6672; --line:#d9d6cd;
+  --accent:#0f6b63; --accent-fg:#ffffff; --warn:#b8641a; --chip:#ebe9e2; --selbg:#e3f1ef;
+  --fam-v2:#8a5a14; --fam-jev:#0f6b63; --fam-emb:#5b4a9e;
+  --font-body:"Public Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15181c;--surface:#1e2227;--fg:#e7e6e1;--muted:#9aa3ad;--line:#333941;--accent:#4fb3a8;--accent-fg:#0f1a18;--warn:#e0924a;--chip:#2a3036;--selbg:#1d3532;--fam-v2:#d9a35a;--fam-jev:#4fb3a8;--fam-emb:#a598e0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15181c;--surface:#1e2227;--fg:#e7e6e1;--muted:#9aa3ad;--line:#333941;--accent:#4fb3a8;--accent-fg:#0f1a18;--warn:#e0924a;--chip:#2a3036;--selbg:#1d3532;--fam-v2:#d9a35a;--fam-jev:#4fb3a8;--fam-emb:#a598e0;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:1000px;margin:0 auto;padding:0 16px 96px}
+header.top{padding:24px 0 8px;display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end}
+header.top .titles{flex:1 1 420px;min-width:0}
+h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:19px;margin:36px 0 4px;letter-spacing:-.005em}
+h3{font-size:16px;margin:0}
+p{margin:0 0 10px}
+.lede{color:var(--muted);max-width:72ch;margin:0}
+a{color:var(--accent)}
+code,.mono{font-family:var(--font-mono);font-size:.88em}
+label.day{display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+select{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);color:var(--fg)}
+select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav.toc{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 0;display:flex;flex-wrap:wrap;gap:6px}
+nav.toc a{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 10px;font-size:12.5px;text-decoration:none;font-family:var(--font-mono)}
+nav.toc a:hover{border-color:var(--accent)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:16px 0}
+.box ol,.box ul{margin:6px 0 0;padding-left:20px}
+.box li{margin:3px 0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.tblwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+td,th{padding:7px 10px;border-top:1px solid var(--line);vertical-align:top;text-align:left}
+th{color:var(--muted);font-weight:600;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;border-top:0;white-space:nowrap}
+td.num{font-family:var(--font-mono);font-size:12.5px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+th.num{text-align:right}
+td.name{white-space:nowrap}
+td.name a{font-family:var(--font-mono);font-size:12.5px}
+.fam{display:inline-block;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap;border:1px solid currentColor}
+.fam.v2{color:var(--fam-v2)} .fam.jev{color:var(--fam-jev)} .fam.emb{color:var(--fam-emb)} .fam.base{color:var(--muted)}
+.layer{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;margin:14px 0;scroll-margin-top:110px}
+.layer.v2{border-left-color:var(--fam-v2)} .layer.jev{border-left-color:var(--fam-jev)} .layer.emb{border-left-color:var(--fam-emb)}
+.layer > header{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;padding:12px 16px;border-bottom:1px solid var(--line)}
+.layer > header h3{font-family:var(--font-mono);font-size:15px}
+.layer > header .one{flex:1 1 300px;color:var(--muted);font-size:14px}
+.layer > header a.open{font-size:12.5px;white-space:nowrap}
+.body{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:0}
+.body > div{padding:12px 16px}
+.body > div + div{border-left:1px solid var(--line)}
+@media (max-width:760px){.body{grid-template-columns:1fr}.body > div + div{border-left:0;border-top:1px solid var(--line)}}
+.k{font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin:10px 0 3px}
+.k:first-child{margin-top:0}
+ol.steps{margin:0;padding-left:20px}
+ol.steps li{margin:3px 0}
+.vs{font-size:14px}
+.vs code{background:var(--chip);border-radius:4px;padding:0 4px}
+dl.params{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:12.5px}
+dl.params dt{font-family:var(--font-mono);color:var(--muted)}
+dl.params dd{margin:0;font-family:var(--font-mono);word-break:break-word}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 6px}
+.stats div{background:var(--bg);border-radius:6px;padding:6px 8px}
+.stats b{display:block;font-family:var(--font-mono);font-size:17px;font-variant-numeric:tabular-nums}
+.stats span{color:var(--muted);font-size:11.5px}
+.outcomes{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.note{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);margin-top:10px;padding-top:8px}
+.missing{color:var(--muted);font-style:italic;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="titles">
+    <h1>Layer key</h1>
+    <p class="lede">What each grouping layer does, step by step, what it is compared against, and how it came out on the chosen day. Every layer groups the same signals, so the differences between two layers come down to the one thing that was changed. Back to <a id="viewerLink" href="../viewer.html">the viewer</a>.</p>
+  </div>
+  <label class="day">Day <select id="day"></select></label>
+</header>
+
+<nav class="toc" id="toc" aria-label="Layers"></nav>
+
+<div class="box">
+  <h3>What every layer has in common</h3>
+  <ol>
+    <li>Take one country-day of signals (X posts, Dataminr, ACLED, …) and walk them <b>once, in publication order</b>. No decision is revisited, so a different order could group differently.</li>
+    <li>For each signal, either <b>join</b> an event the layer has already built that day, or <b>start a new event</b>. Replayed layers start the day with no open events; only <code>clear-as-run</code> carries events from earlier days.</li>
+    <li>Signals judged irrelevant are <b>dropped</b> and join nothing. The model-free layers reuse CLEAR's own verdict; the Jev layers ask Jev again, so they drop a few more.</li>
+  </ol>
+  <p class="small muted" style="margin:8px 0 0">The numbers below describe shape only: how much a layer merges, not whether the merges are right. Correctness comes from judgments (pair precision and recall in <code>score.py</code>). Single-signal share counts events built from one signal.</p>
+</div>
+
+<h2>At a glance</h2>
+<p class="muted small">Click a name for its breakdown.</p>
+<div class="tblwrap"><table>
+  <thead><tr><th>Layer</th><th>Family</th><th>The one change</th><th class="num">Events</th><th class="num">Merge ratio</th><th class="num">Single-signal</th></tr></thead>
+  <tbody id="glance"></tbody>
+</table></div>
+
+<div id="families"></div>
+</div>
+
+<script>
+// ── What each layer is. Numbers and settings are read from the layer files. ──
+const FAMILIES = [
+  { key: 'v2', title: "Today's rule, and cheap fixes to it", sub: 'No model. Identity is a key: two signals are the same event when their labels are equal.' },
+  { key: 'jev', title: 'Jev: ask which event a signal is about', sub: "Idea 1 and the core of D-0166. The model reads the signal and short summaries of the candidate events." },
+  { key: 'emb', title: 'Embeddings: text similarity, no LLM', sub: 'The control for Jev. If plain similarity groups as well, Jev is not earning its cost.' },
+];
+
+const KEY = {
+  'clear-as-run': {
+    fam: 'v2', famLabel: 'baseline',
+    one: 'What CLEAR actually produced',
+    change: 'Production output, fetched from the dev API',
+    steps: [
+      'Each signal gets a place (coordinates mapped to a district, or one Claude call for X posts) and a type (one Jev call, primary GLIDE code).',
+      'Key = (district, type family), the middle level of the taxonomy: "drone strike" and "shelling" are both "explosions / remote violence".',
+      'Join the open event (newest signal under 7 days old) with the same key; if several match, the one with the newest signal.',
+      'No district (state or country only)? No match is attempted: always a new event.',
+    ],
+    vs: null,
+    question: 'The baseline every other layer is measured against.',
+    note: 'Carries events from earlier days, which replayed layers do not. Its alert count uses CLEAR\'s event severity, so it is not comparable with the replayed layers.',
+  },
+  'v2-replay': {
+    fam: 'v2', one: "Today's rule, replayed from an empty start",
+    change: 'Same rule as clear-as-run, starting the day empty',
+    steps: [
+      'Key = (district, type family) of the signal\'s glide code.',
+      'Join the open event in the window with that key and the newest signal.',
+      'No district: new event (outcome <code>no-district</code>).',
+    ],
+    vs: 'clear-as-run',
+    question: 'Does the replay reproduce production? It is the fair control for every other replayed layer.',
+  },
+  'v2-gazetteer': {
+    fam: 'v2', one: 'v2-replay, plus a location fix for state-only signals',
+    change: 'State-only signals promoted to a district by a place they name',
+    steps: [
+      'If the signal already has a district, use it.',
+      'Otherwise take the places it names (from <code>translate.py</code>, in mention order) and look each up in the day\'s location tree: districts, and named points inside a district.',
+      'Names are matched on consonant skeletons (Tandilti, Tendelti, Tandaltai → tndlt). The first place that resolves to exactly one district in the signal\'s state wins.',
+      'Then apply the V2 key exactly as v2-replay does.',
+    ],
+    vs: 'v2-replay',
+    question: 'Idea 6: how much do the cheap location fixes recover without Jev?',
+    note: 'The gazetteer is loose: on 20 Oct about 5 of 38 promotions were wrong, mostly places outside Sudan (Kufra in Libya landed in Bahri). Each promotion shows as "placed in X by name" in the viewer.',
+  },
+  'v2-gazetteer-l1': {
+    fam: 'v2', one: 'v2-gazetteer, keyed on the broadest type',
+    change: 'Type family at the top level ("conflict") instead of the middle',
+    steps: [
+      'Place exactly as v2-gazetteer.',
+      'Key = (district, top-level family), so "drone strike", "attack on civilians" and "battle" all count as "conflict".',
+      'Join or start a new event as in v2-replay.',
+    ],
+    vs: 'v2-gazetteer',
+    question: 'Idea 6, other half: does a coarser type stop one strike splitting into "drone strike" and "attack on civilians" without over-merging?',
+  },
+  'naive-state': {
+    fam: 'v2', one: 'Key on (state, exact type code)',
+    change: 'State instead of district, exact code instead of family',
+    steps: [
+      'Key = (state, glide code).',
+      'Join the most recent open event in the window with that key; otherwise new event.',
+    ],
+    vs: 'v2-replay',
+    question: 'Idea 7, the admin-1 key the page rejected. Does it really over-merge in big states like Khartoum and North Darfur?',
+  },
+  'jev-v1': {
+    fam: 'jev', one: 'Jev picks which open event the signal is about, or none',
+    change: 'Identity by Jev instead of a key',
+    steps: [
+      'Candidates = events open in the window in the signal\'s state (plus country-level ones), newest first, up to the cap.',
+      'Each candidate is shown as a rule-built summary: place · first title · report count and time span · latest title.',
+      'One Jev call asks three questions: <b>which</b> event (a choice over the candidates plus "none"), does it <b>match any</b> (yes/no), and is it <b>relevant</b> (the production gate).',
+      'Relevance below the gate: dropped. No candidates: new event.',
+      'Join the winner when matches-any, the winner\'s probability and its lead over the runner-up all pass their thresholds.',
+      'Otherwise new event; candidates above the link threshold are kept as links for an analyst (<code>new-linked</code>).',
+    ],
+    vs: 'v2-replay',
+    question: 'Idea 1, D-0166 as decided: does reading the text beat a key?',
+  },
+  'jev-v1-7d': {
+    fam: 'jev', one: 'jev-v1 with a 7-day window',
+    change: 'Window 168 h instead of 72 h',
+    steps: ['As jev-v1, with candidates open in the last 7 days.'],
+    vs: 'jev-v1',
+    question: 'Do X posts that resurface 3–7-day-old incidents need the longer window?',
+    note: 'Identical to jev-v1 until multi-day replay exists: on a single day every candidate is from the same day.',
+  },
+  'jev-v1-strict': {
+    fam: 'jev', one: 'jev-v1 with harder join thresholds',
+    change: 'Thresholds only',
+    steps: ['As jev-v1. Only the three join thresholds (winner, margin, matches-any) are raised; see the settings.'],
+    vs: 'jev-v1',
+    question: 'Where should the near-misses land? Brackets V3\'s thresholds from above.',
+  },
+  'jev-v1-loose': {
+    fam: 'jev', one: 'jev-v1 with easier join thresholds',
+    change: 'Thresholds only',
+    steps: ['As jev-v1. Only the three join thresholds (winner, margin, matches-any) are lowered; see the settings.'],
+    vs: 'jev-v1',
+    question: 'Where should the near-misses land? Brackets V3\'s thresholds from below.',
+  },
+  'jev-v1-country': {
+    fam: 'jev', one: 'jev-v1, also offering other states\' events',
+    change: 'Candidates from the whole country',
+    steps: [
+      'Candidates = the state\'s open events first (exactly jev-v1\'s list), then other states\' open events newest first, up to the cap.',
+      'Everything else as jev-v1.',
+    ],
+    vs: 'jev-v1',
+    question: 'Do signals placed in the wrong state miss their event because it is never offered? (The Mujlad market strike landed in four places.)',
+    note: 'On 20 Oct it made 10 joins across states, several of them the Mujlad / Abyei strike; a couple look wrong.',
+  },
+  'embed-v1': {
+    fam: 'emb', one: 'Join the most similar candidate by text embedding',
+    change: 'Cosine similarity instead of Jev',
+    steps: [
+      'Embed every signal\'s original text (title + text) with Voyage.',
+      'Candidates exactly as jev-v1 (same state, window, cap).',
+      'A candidate\'s score is the similarity to its <b>closest</b> signal (single link).',
+      'Join the best when it is at least the similarity threshold and beats the runner-up by the margin; otherwise new event, with candidates above the link threshold kept as links.',
+    ],
+    vs: 'jev-v1',
+    question: 'Is Jev doing more than text similarity would?',
+    note: 'The threshold 0.78 is about the 99th percentile of similarity between random pairs of the day\'s signals; same-incident Tendalti pairs have a median of 0.73. At 0.78 it barely merges.',
+  },
+  'embed-v1-matched': {
+    fam: 'emb', one: 'embed-v1 at the threshold where it merges as much as jev-v1',
+    change: 'Similarity threshold lowered to match jev-v1\'s merge ratio',
+    steps: ['As embed-v1, with the threshold set so the merge ratio equals jev-v1\'s (2.12 against 2.13 on 20 Oct).'],
+    vs: 'jev-v1',
+    question: 'At equal merge levels, which makes fewer wrong merges? Pair precision against jev-v1 is the answer.',
+  },
+};
+
+// Settings worth showing, in order, with readable names.
+const PARAM_LABELS = [
+  ['windowHours', 'window', v => `${v} h`], ['candidateScope', 'candidates', v => v],
+  ['maxCandidates', 'max candidates'], ['absThreshold', 'winner ≥'], ['margin', 'lead ≥'],
+  ['anyThreshold', 'matches any ≥'], ['linkThreshold', 'link ≥'], ['relevanceThreshold', 'relevance ≥'],
+  ['simThreshold', 'similarity ≥'], ['simMargin', 'lead ≥'], ['simLinkThreshold', 'link ≥'],
+  ['typeLevel', 'type level', v => v === 1 ? '1 (top: conflict…)' : '2 (family)'], ['gazetteer', 'gazetteer', v => v ? 'on' : 'off'],
+  ['model', 'model'], ['dims', 'dimensions'], ['promptVersion', 'prompt'], ['relevance', 'relevance'],
+];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function getJson(path) {
+  try { const r = await fetch(path, { cache: 'no-cache' }); return r.ok ? r.json() : null; } catch (e) { return null; }
+}
+
+function shape(layer) {
+  const events = layer.events || [];
+  const assigned = events.reduce((n, e) => n + (e.signalIds || []).length, 0);
+  const outcomes = {};
+  for (const d of Object.values(layer.decisions || {})) outcomes[d.outcome] = (outcomes[d.outcome] || 0) + 1;
+  return {
+    events: events.length,
+    ratio: events.length ? assigned / events.length : 0,
+    single: events.length ? events.filter(e => (e.signalIds || []).length === 1).length / events.length : 0,
+    outcomes,
+  };
+}
+
+function paramsHtml(p) {
+  if (!p) return '<span class="missing">no settings recorded</span>';
+  const rows = PARAM_LABELS.filter(([k]) => p[k] != null && p[k] !== '')
+    .map(([k, label, f]) => `<dt>${esc(label)}</dt><dd>${esc(f ? f(p[k]) : p[k])}</dd>`);
+  return rows.length ? `<dl class="params">${rows.join('')}</dl>` : '<span class="missing">none</span>';
+}
+
+function card(name, info, layer, dayKey) {
+  const s = layer ? shape(layer) : null;
+  const fam = info ? info.fam : 'base';
+  const viewer = `../viewer.html?day=${encodeURIComponent(dayKey)}&layer=${encodeURIComponent(name)}`;
+  const vs = info && info.vs ? `Compare with <a href="#${esc(info.vs)}"><code>${esc(info.vs)}</code></a>: the one change is <b>${esc(info.change.charAt(0).toLowerCase() + info.change.slice(1))}</b>.` : info ? 'Nothing: this is the baseline.' : '';
+  return `<article class="layer ${fam}" id="${esc(name)}">
+    <header><h3>${esc(name)}</h3><span class="one">${esc(info ? info.one : 'No description yet. Add it to KEY in layer-key/index.html.')}</span>${layer ? `<a class="open" href="${viewer}">Open in viewer →</a>` : ''}</header>
+    <div class="body">
+      <div>
+        ${info ? `<div class="k">How it decides</div><ol class="steps">${info.steps.map(t => `<li>${t}</li>`).join('')}</ol>
+        <div class="k">Compared with</div><p class="vs">${vs}</p>
+        <div class="k">Question it answers</div><p>${esc(info.question)}</p>
+        ${info.note ? `<p class="note">${esc(info.note)}</p>` : ''}` : ''}
+      </div>
+      <div>
+        <div class="k">This day</div>
+        ${s ? `<div class="stats"><div><b>${s.events}</b><span>events</span></div><div><b>${s.ratio.toFixed(2)}</b><span>merge ratio</span></div><div><b>${Math.round(s.single * 100)}%</b><span>single-signal</span></div></div>
+          <div class="outcomes">${Object.entries(s.outcomes).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${esc(k)} ${n}`).join(' · ')}</div>`
+          : '<span class="missing">Not run for this day.</span>'}
+        <div class="k">Settings</div>${layer ? paramsHtml(layer.params) : '<span class="missing">—</span>'}
+      </div>
+    </div>
+  </article>`;
+}
+
+let index = {};
+async function render(dayKey) {
+  document.getElementById('viewerLink').href = `../viewer.html?day=${encodeURIComponent(dayKey)}`;
+  const names = index[dayKey] || [];
+  const files = {};
+  await Promise.all(names.map(async n => { files[n] = await getJson(`../layers/${dayKey.split('/')[0]}/${dayKey.split('/')[1]}.${n}.json`); }));
+  // Known layers in the key's order, then anything registered that the key doesn't describe yet.
+  const order = [...Object.keys(KEY), ...names.filter(n => !KEY[n])];
+  const shown = order.filter(n => KEY[n] || files[n]);
+
+  document.getElementById('toc').innerHTML = shown.map(n => `<a href="#${esc(n)}">${esc(n)}</a>`).join('');
+  document.getElementById('glance').innerHTML = shown.map(n => {
+    const info = KEY[n], s = files[n] ? shape(files[n]) : null;
+    return `<tr><td class="name"><a href="#${esc(n)}">${esc(n)}</a></td>
+      <td><span class="fam ${info ? (info.famLabel ? 'base' : info.fam) : 'base'}">${esc(info ? (info.famLabel || { v2: 'key rule', jev: 'Jev', emb: 'embeddings' }[info.fam]) : '?')}</span></td>
+      <td>${esc(info ? info.change : '')}</td>
+      <td class="num">${s ? s.events : '—'}</td><td class="num">${s ? s.ratio.toFixed(2) : '—'}</td><td class="num">${s ? Math.round(s.single * 100) + '%' : '—'}</td></tr>`;
+  }).join('');
+
+  const extra = shown.filter(n => !KEY[n]);
+  document.getElementById('families').innerHTML = FAMILIES.map(f => {
+    const members = shown.filter(n => KEY[n] && KEY[n].fam === f.key);
+    return members.length ? `<h2>${esc(f.title)}</h2><p class="muted">${esc(f.sub)}</p>${members.map(n => card(n, KEY[n], files[n], dayKey)).join('')}` : '';
+  }).join('') + (extra.length ? `<h2>Not in the key yet</h2>${extra.map(n => card(n, null, files[n], dayKey)).join('')}` : '');
+  if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+}
+
+(async () => {
+  index = await getJson('../layers/index.json') || {};
+  const days = Object.keys(index).sort().reverse();
+  const want = new URLSearchParams(location.search).get('day');
+  const sel = document.getElementById('day');
+  sel.innerHTML = days.map(d => `<option${d === want ? ' selected' : ''}>${esc(d)}</option>`).join('') || '<option>no layers yet</option>';
+  sel.onchange = () => { history.replaceState(null, '', `?day=${encodeURIComponent(sel.value)}${location.hash}`); render(sel.value); };
+  render(sel.value);
+})();
+</script>
+</body>
+</html>

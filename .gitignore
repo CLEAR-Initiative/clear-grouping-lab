@@ -1,9 +1,9 @@
 # Never commit fetched data, layers, judgments, judging packs or keys. Seeds and code only.
 .env
-data/
-layers/
-judgments/
+/data
+/layers
+/judgments
 __pycache__/
 *.pyc
 .DS_Store
-packs/
+/packs

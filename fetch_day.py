@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fetch one country-day from the dev CLEAR API into data/<country>/<date>.json
-and derive the `clear-as-run` layer from it.
+and derive the `clear-as-run` layer from it. Also refreshes data/<country>/geo.json
+(fetch_geo.py) so the viewer can map the day's signals.
 
     python3 fetch_day.py --country sudan --date 2026-10-20
 
@@ -26,6 +27,7 @@ import os
 import sys
 from datetime import timedelta
 
+from fetch_geo import update_geo
 from lab_common import (
     COUNTRY_IDS,
     Hierarchy,
@@ -250,6 +252,9 @@ def main() -> None:
     write_json(lp, layer)
     register_layer(args.country, args.date, "clear-as-run")
     print(f"wrote {lp}")
+
+    # Outlines and points for the viewer's per-card maps (cheap after the first day).
+    update_geo(args.country)
 
 
 if __name__ == "__main__":

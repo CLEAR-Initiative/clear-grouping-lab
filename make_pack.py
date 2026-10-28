@@ -50,6 +50,16 @@ def main() -> None:
     }
     for name in names:
         files[f"layers/{spec}.{name}.json"] = json.loads((LAYERS / args.country / f"{args.date}.{name}.json").read_text())
+    # Optional extras the viewer uses when present: English translations + place names, and map outlines.
+    extras = {
+        f"data/{spec}.translations.json": (DATA / args.country / f"{args.date}.translations.json", "translate.py"),
+        f"data/{args.country}/geo.json": (DATA / args.country / "geo.json", "fetch_geo.py"),
+    }
+    for key, (path, script) in extras.items():
+        if path.exists():
+            files[key] = json.loads(path.read_text())
+        else:
+            print(f"note: no {path.relative_to(LAB)}; the pack works without it, but run {script} first for a better one")
 
     # Every `<` becomes \u003c (it only occurs inside JSON strings), so signal text such as
     # "</script>" or "<!--<script" can't end or derail the inline script.

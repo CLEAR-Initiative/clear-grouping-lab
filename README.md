@@ -48,6 +48,14 @@ Good to know:
   come back. Use the same browser and the same file.
 - The *Layer* menu switches between algorithms. Your answers are about signals,
   not cards, so any layer works. Stay on the first one unless asked otherwise.
+- Posts in Arabic show an English machine translation, with the original in
+  grey underneath. Place names that appear in more than one row of a card share
+  a colour, even when spelled differently (Sali / Sally). Click a place name to
+  search for it.
+- Each card has a small map: numbered pins are exact points, and a shaded area
+  means the signal only said which district or state, so it could be anywhere
+  inside it. Click the map to enlarge it. "date only" means the source gave a
+  date but no time.
 - The search box filters by text or place name, and selections survive a
   search. That's the quickest way to find every post about one town.
 - Partial answers are useful. Download and send whatever you have.
@@ -100,23 +108,34 @@ Run these from the lab folder. Swap in the country and date you want.
    ```bash
    python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1 --window-hours 168 --tag 7d
    ```
-3. **Judge it yourself** in the viewer. Start the server, then open
+3. **Translate the day** into English and list the places each signal names, so
+   judges can read the Arabic posts and see which rows mention the same place.
+   One cached model call per signal through `OPENROUTER_API_KEY` (about two
+   minutes for a day; re-runs are free). The model sees one signal at a time and
+   only translates; the viewer shows the original under every translation.
+   `fetch_day.py` already refreshed `data/<country>/geo.json` for the maps
+   (`python3 fetch_geo.py --country sudan` does it on its own).
+   ```bash
+   python3 translate.py --country sudan --date 2026-10-20
+   ```
+4. **Judge it yourself** in the viewer. Start the server, then open
    <http://localhost:8765/viewer.html?day=sudan/2026-10-20>.
    ```bash
    python3 -m http.server 8765
    ```
-4. **Send it to judges.** Build a pack: one HTML file with the day built in.
-   It writes `packs/sudan-2026-10-20.html` (gitignored, about 2–4 MB). Email it
+5. **Send it to judges.** Build a pack: one HTML file with the day built in.
+   It writes `packs/sudan-2026-10-20.html` (gitignored, about 2–4 MB) and builds
+   in the translations and map outlines when they exist. Email it
    with the [Judging](#judging-no-install-needed) section pasted in. Leave out
    layers that would only confuse judges; `jev-v1-7d` is identical to `jev-v1`
    until the window gap below is fixed.
    ```bash
    python3 make_pack.py --country sudan --date 2026-10-20 --layers clear-as-run,jev-v1,naive-state --send-to "James"
    ```
-5. **Collect answers.** Save each returned `2026-10-20.<name>.json` into
+6. **Collect answers.** Save each returned `2026-10-20.<name>.json` into
    `judgments/sudan/`. To check a judge's answers in the viewer, use
    **Import file** on tab 3.
-6. **Score** every layer against every judgment file for the day.
+7. **Score** every layer against every judgment file for the day.
    ```bash
    python3 score.py --country sudan --date 2026-10-20 --all
    ```
@@ -176,6 +195,16 @@ new-linked | no-candidates | dropped | retracted; eventId; relevance; matchesAny
 noneP; candidates[] with eventId, summary, p; linked[]). `layers/index.json`
 lists the layers per day for the viewer.
 
+**Translations** `data/<country>/<date>.translations.json`: `model`,
+`promptVersion`, `createdAt`, `signals{signalId}` (lang, title, text, places[]).
+`title`/`text` are null when the original is English; `places` are spelled as
+they appear in the English text.
+
+**Geo** `data/<country>/geo.json`: `areas{locationId}` (l level, c centre,
+bb bbox, r outer rings simplified to ~1 km) for the country, states and
+districts; `points{locationId}` ([lon, lat]) for the level-4 places signals
+resolve to. Shared by every day of the country.
+
 **Judgments** `judgments/<country>/<date>.<judge>.json`: `same[]` (lists of signal
 ids that are one event), `apart[]` (pairs that are not), `campaigns[]` (name,
 signalIds), `notes{}`. Signal-level, so one file scores every layer.
@@ -185,7 +214,9 @@ signalIds), `notes{}`. Signal-level, so one file scores every layer.
 | File | Role |
 |---|---|
 | `lab_common.py` | `.env` loading, GraphQL call, paths, location tree |
-| `fetch_day.py` | dev API → day file + `clear-as-run` layer |
+| `fetch_day.py` | dev API → day file + `clear-as-run` layer (then runs `fetch_geo.py`) |
+| `fetch_geo.py` | dev API → `geo.json`: outlines and points for the viewer's maps |
+| `translate.py` | day file → English translations + place names per signal (OpenRouter) |
 | `replay.py` | day file → candidate layers (`jev-v1`, `naive-state`) |
 | `viewer.html` | static judging UI |
 | `compare.html` | short link to the viewer's *Compare layers* tab: two layers side by side, grouped by the signals either one merged, e.g. `compare.html?day=sudan/2026-10-20&layer=jev-v1` (left defaults to `clear-as-run`; `&vs=` picks another). Hidden in packs |

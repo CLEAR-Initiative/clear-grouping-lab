@@ -123,6 +123,39 @@ body.wide .wrap,body.wide .tray .in{max-width:1640px}
 .empty{color:var(--muted);padding:40px 0;text-align:center}
 code{font-family:var(--font-mono);font-size:12.5px}
 @media (prefers-reduced-motion:reduce){.tray{transition:none}}
+/* Place colours: one per place named in more than one row of a card. */
+:root{--p1:#b45309;--p2:#7c3aed;--p3:#0369a1;--p4:#be185d;--p5:#15803d;--p6:#4d7c0f}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--p1:#f59e0b;--p2:#a78bfa;--p3:#38bdf8;--p4:#f472b6;--p5:#4ade80;--p6:#bef264}}
+:root[data-theme="dark"]{--p1:#f59e0b;--p2:#a78bfa;--p3:#38bdf8;--p4:#f472b6;--p5:#4ade80;--p6:#bef264}
+mark.pl{background:none;color:inherit;box-shadow:inset 0 -1px var(--muted);cursor:pointer}
+mark.pl.c{background:color-mix(in srgb,var(--pc) 16%,transparent);box-shadow:inset 0 -2px var(--pc);border-radius:2px}
+.orig{color:var(--muted);font-size:12.5px;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word;unicode-bidi:plaintext}
+tr.open .orig{-webkit-line-clamp:unset;display:block}
+.orig .lbl{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-right:4px}
+.rn{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-fg);font-weight:600;font-size:11px;margin-right:6px;padding:0 4px}
+.donly{font-size:11px;border:1px dashed var(--line);border-radius:3px;padding:0 4px;cursor:help}
+td.loc .sub{font-size:12px;margin-top:2px}
+.geo{display:flex;flex-wrap:wrap;gap:10px 16px;padding:10px 14px;border-bottom:1px solid var(--line);align-items:flex-start}
+.mapbtn{border:1px solid var(--line);border-radius:6px;padding:0;background:var(--bg);cursor:zoom-in;line-height:0;flex:0 0 auto;width:280px;max-width:100%}
+.mapbtn svg{width:100%;height:auto;display:block}
+.geoside{flex:1 1 300px;min-width:0;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.geoside .pchip{display:inline-block;margin:0 6px 4px 0;font-size:13px;color:var(--fg)}
+.geoside .pchip b{font-family:var(--font-mono);font-size:11px;color:var(--muted);font-weight:500;margin-left:3px}
+.legend{font-size:12px}
+.m-bg{fill:var(--bg)} .m-d{fill:none;stroke:var(--line);stroke-width:.7} .m-s{fill:none;stroke:var(--muted);stroke-width:1;opacity:.55}
+.m-a{fill:var(--accent);fill-opacity:.13;stroke:var(--accent);stroke-width:1.5}
+.m-name{fill:var(--muted);font-family:var(--font-body);opacity:.85;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+.m-alab{fill:var(--accent);font-family:var(--font-mono);font-weight:600;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+.m-pin{fill:var(--accent);stroke:var(--bg);stroke-width:1.5} .m-pinlab{fill:var(--accent-fg);font-family:var(--font-mono);font-weight:600}
+.m-dot{fill:var(--fg)} .m-lead{stroke:var(--fg);stroke-width:1;opacity:.6}
+.m-scale{stroke:var(--fg);stroke-width:2} .m-scalet{fill:var(--fg);font-family:var(--font-mono)}
+.modal{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal[hidden]{display:none}
+.mbox{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:min(1000px,100%);max-height:100%;overflow:auto}
+.mbox header{display:flex;gap:12px;align-items:baseline;padding:10px 14px;border-bottom:1px solid var(--line)}
+.mbox header b{flex:1;min-width:0}
+.mbox svg{width:100%;height:auto;display:block}
+.mbox .legend{padding:8px 14px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -130,7 +163,7 @@ code{font-family:var(--font-mono);font-size:12.5px}
 <header class="top">
   <div class="titles">
     <h1 id="h1">Grouping lab</h1>
-    <p class="lede">Judge how signals were grouped into events. Each card is one event as the chosen layer built it; every row is one original signal. Your judgments are about signals, so they score every layer at once. Nothing here is pre-judged by a model.</p>
+    <p class="lede">Judge how signals were grouped into events. Each card is one event as the chosen layer built it; every row is one original signal. Your judgments are about signals, so they score every layer at once. Nothing here is pre-judged by a model. Translations and place names are machine-made one signal at a time, with the original text shown underneath.</p>
   </div>
   <div class="setup">
     <label>Day <select id="day"></select></label>
@@ -150,7 +183,7 @@ code{font-family:var(--font-mono);font-size:12.5px}
 </nav>
 
 <section class="panel" id="panel-multi">
-  <div class="howto"><b>Should these be one event?</b> Each card is an event the layer built from more than one signal. Read the rows; tick <b>not this one</b> on any signal that reports a different real-world occurrence, then press <b>Yes, one event</b> for the rest. Same occurrence means the same thing happening, not the same actor or the same kind of attack; use <b>select</b> and <b>One campaign</b> for those. Click a row's text to expand it.</div>
+  <div class="howto"><b>Should these be one event?</b> Each card is an event the layer built from more than one signal. Read the rows; tick <b>not this one</b> on any signal that reports a different real-world occurrence, then press <b>Yes, one event</b> for the rest. Same occurrence means the same thing happening, not the same actor or the same kind of attack; use <b>select</b> and <b>One campaign</b> for those. Click a row's text to expand it. Places named in more than one row share a colour; row numbers match the pins on the card's map (click the map to enlarge it); click a place name to search for it.</div>
   <div class="bar"><label><input type="checkbox" id="hideDoneMulti"> hide cards I've answered</label></div>
   <div id="multi"></div>
 </section>
@@ -193,6 +226,11 @@ code{font-family:var(--font-mono);font-size:12.5px}
   <button class="primary" id="btnSame">Same event</button>
   <button class="ghost" id="btnCamp">One campaign</button>
   <button class="link" id="btnDeselect">Clear selection</button>
+</div></div>
+
+<div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+  <header><b id="mtitle"></b><button class="ghost" id="mclose">Close</button></header>
+  <div id="mbody"></div>
 </div></div>
 
 <script>
@@ -253,7 +291,7 @@ async function getJson(path) {
   const r = await fetch(path);
   return r.ok ? r.json() : null;
 }
-let index = {}, sigById = new Map();
+let index = {}, sigById = new Map(), TR = {}, GEO = null;
 async function boot() {
   index = await getJson('layers/index.json') || {};
   const daySel = document.getElementById('day');
@@ -273,6 +311,9 @@ async function loadDay(spec) {
   day = await getJson(`data/${country}/${date}.json`);
   if (!day) { document.getElementById('multi').innerHTML = `<div class="empty">No day file at <code>data/${esc(country)}/${esc(date)}.json</code>. Run <code>fetch_day.py</code> first.</div>`; return; }
   sigById = new Map(day.signals.map(s => [s.id, s]));
+  // Optional extras: translate.py's English text + place names, fetch_geo.py's outlines for the maps.
+  TR = ((await getJson(`data/${country}/${date}.translations.json`)) || {}).signals || {};
+  GEO = await getJson(`data/${country}/geo.json`);
   layers = {};
   for (const name of index[spec] || []) {
     const layer = await getJson(`layers/${country}/${date}.${name}.json`);
@@ -334,8 +375,158 @@ function campOf() {
 }
 function matches(s, q) {
   if (!q) return true;
-  const hay = `${s.title || ''} ${s.text || ''} ${(s.location || {}).name || ''} ${stateOf(s)} ${s.source}`.toLowerCase();
-  return hay.includes(q);
+  const t = TR[s.id] || {};
+  const hay = `${s.title || ''} ${s.text || ''} ${t.title || ''} ${t.text || ''} ${(t.places || []).join(' ')} ${(s.location || {}).name || ''} ${stateOf(s)} ${s.source}`.toLowerCase();
+  if (hay.includes(q)) return true;
+  // A place search also finds other spellings of it (Sali / Sally, Al Baraka / Al Burka).
+  const k = placeKey(q);
+  return k.length > 1 && placesOf(s).some(p => placeKey(p) === k);
+}
+
+// ── Places ───────────────────────────────────────────────────────────────
+// Transliterations of Arabic names vary mostly in vowels and articles, so two names are the same
+// place when their consonant skeletons match: Al-Kurmuk / Kurmuk → krmk, Sally / Sali → sl,
+// Al Baraka / Al Burka → brk. Loose on purpose; it only colours text, it never groups anything.
+function placeKey(name) {
+  return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/\(unresolved\)/g, ' ')
+    .replace(/\b(state|city|town|locality|district|area|village|region)\b/g, ' ')
+    .replace(/^\s*(al|el|ad|ar|as|ash|at|an|az|ed|en|es|er)[\s\-'’]+/, '')
+    .replace(/[^a-z]/g, '').replace(/q/g, 'k').replace(/[aeiouy]/g, '').replace(/(.)\1+/g, '$1');
+}
+function locName(s) {   // CLEAR's resolved place as a name, or '' for a bare coordinate
+  const n = ((s.location || {}).name || '').replace(/\s*\(unresolved\)/, '');
+  return /^Point -?\d/.test(n) ? '' : n;
+}
+function placesOf(s) { return [...((TR[s.id] || {}).places || []), locName(s)].filter(Boolean); }
+// Places named in two or more of a card's rows get one of six colours, most-shared first.
+function placeColours(sigs) {
+  const rows = new Map(), label = new Map(), skip = placeKey(day.country);
+  for (const s of sigs) {
+    const ks = new Set();
+    for (const p of placesOf(s)) { const k = placeKey(p); if (k.length > 1 && k !== skip) { ks.add(k); if (!label.has(k)) label.set(k, p); } }
+    ks.forEach(k => rows.set(k, (rows.get(k) || 0) + 1));
+  }
+  const shared = [...rows].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]);
+  const colours = new Map(shared.slice(0, 6).map(([k], i) => [k, i + 1]));
+  return { colours, shared: shared.map(([k, n]) => ({ k, n, label: label.get(k), ci: colours.get(k) })) };
+}
+function hl(raw, places, colours) {
+  if (!raw) return '';
+  const surf = [...new Set(places)].filter(p => p.length > 1).sort((a, b) => b.length - a.length);
+  if (!surf.length) return esc(raw);
+  const alt = surf.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\s\-‐–]+/g, '[\\s\\-‐–]+')).join('|');
+  // Whole words only; browsers without regex lookbehind (Safari < 16.4) fall back to plain matching
+  // rather than throwing and blanking the page.
+  let re;
+  try { re = new RegExp(`(?<!\\p{L})(?:${alt})(?!\\p{L})`, 'giu'); } catch (e) { re = new RegExp(alt, 'gi'); }
+  let out = '', i = 0;
+  for (const m of raw.matchAll(re)) {
+    const ci = colours && colours.get(placeKey(m[0]));
+    out += esc(raw.slice(i, m.index)) +
+      `<mark class="pl${ci ? ' c' : ''}"${ci ? ` style="--pc:var(--p${ci})"` : ''} data-place="${esc(m[0])}" title="${ci ? 'Named in more than one row. ' : ''}Click to search for this place">${esc(m[0])}</mark>`;
+    i = m.index + m[0].length;
+  }
+  return out + esc(raw.slice(i));
+}
+
+// ── Maps ─────────────────────────────────────────────────────────────────
+// Where each row sits: an exact pin, an area (CLEAR only resolved it to a district or state), or the whole country.
+function rowGeo(s) {
+  if (!GEO) return null;
+  const loc = s.location || {};
+  if (loc.level > 2 && GEO.points[loc.id]) return { kind: 'pin', ll: GEO.points[loc.id] };
+  const aid = loc.level === 1 || loc.level === 2 ? loc.id : (s.admin2Id || s.admin1Id);
+  const a = aid && GEO.areas[aid];
+  if (a && a.l > 0) return { kind: 'area', id: aid, a, approx: loc.level > 2 };
+  return { kind: 'country' };
+}
+function km([x1, y1], [x2, y2]) {
+  const r = Math.PI / 180, a = Math.sin((y2 - y1) * r / 2) ** 2 + Math.cos(y1 * r) * Math.cos(y2 * r) * Math.sin((x2 - x1) * r / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(a));
+}
+function inArea([x, y], a) {
+  if (x < a.bb[0] || x > a.bb[2] || y < a.bb[1] || y > a.bb[3]) return false;
+  let inside = false;
+  for (const ring of a.r) for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function fmtKm(d) { return d < 1 ? '<1 km' : d < 10 ? `${d.toFixed(1)} km` : `${Math.round(d)} km`; }
+function geoNote(c, i) {   // the line under a row's location: how it relates to the card's other rows
+  const geos = c.signals.map(rowGeo), g = geos[i];
+  if (!g) return '';
+  if (g.kind === 'country') return 'only resolved to the whole country';
+  if (g.kind === 'pin') {
+    const [lon, lat] = g.ll;
+    let near = null;
+    geos.forEach((o, j) => { if (j !== i && o && o.kind === 'pin') { const d = km(g.ll, o.ll); if (!near || d < near.d) near = { d, j }; } });
+    return `exact point${near ? ` · ${fmtKm(near.d)} from <span class="rn">${near.j + 1}</span>` : ''} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=12/${lat}/${lon}" target="_blank" rel="noopener">map ↗</a>`;
+  }
+  const a = g.a, across = Math.max(km([a.bb[0], a.c[1]], [a.bb[2], a.c[1]]), km([a.c[0], a.bb[1]], [a.c[0], a.bb[3]]));
+  const holds = geos.map((o, j) => o && o.kind === 'pin' && inArea(o.ll, a) ? j + 1 : 0).filter(Boolean);
+  return `${g.approx ? 'place not mapped; ' : ''}somewhere in this ${a.l === 2 ? 'district' : 'state'}, ~${Math.round(across)} km across` +
+         (holds.length ? ` · contains ${holds.map(n => `<span class="rn">${n}</span>`).join('')}` : '');
+}
+function mapSvg(sigs, W, H, big) {
+  const rows = sigs.map((s, i) => ({ n: i + 1, g: rowGeo(s) })).filter(r => r.g && r.g.kind !== 'country');
+  if (!rows.length) return '';
+  let w = 180, s = 90, e = -180, n = -90;
+  for (const r of rows) {
+    const [x0, y0, x1, y1] = r.g.kind === 'pin' ? [...r.g.ll, ...r.g.ll] : r.g.a.bb;
+    w = Math.min(w, x0); s = Math.min(s, y0); e = Math.max(e, x1); n = Math.max(n, y1);
+  }
+  const cx = (w + e) / 2, cy = (s + n) / 2, kx = Math.cos(cy * Math.PI / 180);
+  const scale = Math.min(W / (Math.max((e - w) * kx, 0.15) * 1.3), H / (Math.max(n - s, 0.15) * 1.3));
+  const P = ([lon, lat]) => [W / 2 + (lon - cx) * kx * scale, H / 2 - (lat - cy) * scale];
+  const vw = cx - W / 2 / scale / kx, ve = cx + W / 2 / scale / kx, vs = cy - H / 2 / scale, vn = cy + H / 2 / scale;
+  const inView = bb => bb[0] < ve && bb[2] > vw && bb[1] < vn && bb[3] > vs;
+  const path = a => a.r.map(r => 'M' + r.map(p => P(p).map(v => v.toFixed(1)).join(',')).join('L') + 'Z').join('');
+  const fs = big ? 13 : 9.5;
+  const all = Object.entries(GEO.areas).filter(([, a]) => a.l > 0 && inView(a.bb));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Map of this card's signals"><rect class="m-bg" width="${W}" height="${H}"/>`;
+  svg += all.filter(([, a]) => a.l === 2).map(([, a]) => `<path class="m-d" d="${path(a)}"/>`).join('');
+  svg += all.filter(([, a]) => a.l === 1).map(([, a]) => `<path class="m-s" d="${path(a)}"/>`).join('');
+  const areas = new Map();
+  for (const r of rows) if (r.g.kind === 'area') { if (!areas.has(r.g.id)) areas.set(r.g.id, { a: r.g.a, ns: [] }); areas.get(r.g.id).ns.push(r.n); }
+  svg += [...areas.values()].map(({ a }) => `<path class="m-a" d="${path(a)}"/>`).join('');
+  // Names: states on a wide view, districts on a close one.
+  const nameLevel = n - s > 2.5 ? 1 : 2;
+  svg += all.filter(([, a]) => a.l === nameLevel).map(([id, a]) => {
+    const [x, y] = P(a.c), nm = (day.locations[id] || {}).name;
+    return nm && x > 20 && x < W - 20 && y > 10 && y < H - 6 ? `<text class="m-name" x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${fs}" text-anchor="middle">${esc(nm)}</text>` : '';
+  }).join('');
+  svg += [...areas.values()].map(({ a, ns }) => {
+    let [x, y] = P(a.c); x = Math.min(Math.max(x, 14), W - 14); y = Math.min(Math.max(y + fs * 1.3, 14), H - 6);
+    return `<text class="m-alab" x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${fs + 1}" text-anchor="middle">${ns.join(' ')}</text>`;
+  }).join('');
+  // Pins: nudge overlapping ones apart, with a line back to the true spot.
+  const R = big ? 10 : 7.5, placed = [];
+  for (const r of rows.filter(r => r.g.kind === 'pin')) {
+    const [x, y] = P(r.g.ll);
+    let px = x, py = y, k = 0;
+    while (placed.some(p => Math.hypot(p[0] - px, p[1] - py) < R * 2) && k < 12) { k++; const ang = k * Math.PI / 3; px = x + Math.cos(ang) * R * 2.2 * Math.ceil(k / 6); py = y + Math.sin(ang) * R * 2.2 * Math.ceil(k / 6); }
+    placed.push([px, py]);
+    svg += `${k ? `<line class="m-lead" x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}"/><circle class="m-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2"/>` : ''}` +
+           `<circle class="m-pin" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${R}"/><text class="m-pinlab" x="${px.toFixed(1)}" y="${(py + R * 0.42).toFixed(1)}" font-size="${R * 1.2}" text-anchor="middle">${r.n}</text>`;
+  }
+  // Scale bar, bottom left.
+  const kmPx = 111.32 / scale, want = kmPx * W / 5, nice = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].reduce((b, v) => Math.abs(v - want) < Math.abs(b - want) ? v : b);
+  const len = nice / kmPx;
+  svg += `<line class="m-scale" x1="8" y1="${H - 8}" x2="${(8 + len).toFixed(1)}" y2="${H - 8}"/><text class="m-scalet" x="8" y="${H - 13}" font-size="${fs}">${nice} km</text>`;
+  return svg + '</svg>';
+}
+function geoStrip(c, shared) {
+  const svg = GEO ? mapSvg(c.signals, 280, 180, false) : '';
+  const nCountry = GEO ? c.signals.filter(s => (rowGeo(s) || {}).kind === 'country').length : 0;
+  const chips = shared.length
+    ? `<div>Named in more than one row: ${shared.map(p => `<span class="pchip">${p.ci ? `<mark class="pl c" style="--pc:var(--p${p.ci})" data-place="${esc(p.label)}">${esc(p.label)}</mark>` : esc(p.label)}<b>×${p.n}</b></span>`).join('')}</div>`
+    : (Object.keys(TR).length ? '<div>No place is named in more than one row.</div>' : '');
+  const legend = GEO ? `<div class="legend">${svg ? 'Numbered pin = exact point. Shaded area = the signal only resolved to a district or state, so it could be anywhere inside it.' : 'None of these signals resolved to anything smaller than the country, so there is nothing to map.'}${svg && nCountry ? ` ${nCountry} row${nCountry > 1 ? 's' : ''} only resolved to the whole country and ${nCountry > 1 ? 'are' : 'is'} not on the map.` : ''}</div>` : '';
+  if (!svg && !chips && !legend) return '';
+  return `<div class="geo">${svg ? `<button class="mapbtn" data-act="bigmap" data-card="${esc(c.key)}" title="Enlarge map" aria-label="Enlarge map">${svg}</button>` : ''}<div class="geoside">${chips}${legend}</div></div>`;
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────
@@ -345,11 +536,30 @@ function hm(iso) { return iso ? iso.slice(11, 16) : '?'; }
 function md(iso) { return iso ? iso.slice(5, 10) : '?'; }
 function sevChip(v) { return v == null ? '' : `<span class="chip ${v >= 4 ? 'sev4' : ''}">sev ${v}</span>`; }
 
-function textCell(s) {
+const LANG = { ar: 'Arabic', fr: 'French', en: 'English', am: 'Amharic', ti: 'Tigrinya' };
+// ACLED rows carry a date, not a time; they arrive stamped 00:00:00 and would read as midnight.
+function dateOnly(s) { return s.source === 'acled' || /T00:00:00(\.000)?Z$/.test(s.publishedAt || ''); }
+function timeCell(s, n) {
+  return `${n ? `<span class="rn">${n}</span>` : ''}${dateOnly(s) ? `<span class="donly" title="This source gives the date only, not a time">date only</span>` : hm(s.publishedAt)}`;
+}
+// English first (translated when the original isn't), the original underneath in grey.
+function textCell(s, colours) {
   const text = (s.text || '').trim(), title = (s.title || '').trim();
   const titleAdds = title && !title.endsWith('…') && !text.startsWith(title.slice(0, 40));
-  const body = text || title;
-  return `${titleAdds && text ? `<span class="ttl" dir="auto">${esc(title)}</span>` : ''}<div class="clamp" dir="auto">${esc(body)}</div>`;
+  const t = TR[s.id], places = (t && t.places) || [];
+  const tr = t && (t.title || t.text) ? { title: (t.title || '').trim(), text: (t.text || '').trim() } : null;
+  const [showTitle, showBody] = tr ? [titleAdds && tr.text ? tr.title : '', tr.text || tr.title] : [titleAdds && text ? title : '', text || title];
+  const main = `${showTitle ? `<span class="ttl" dir="auto">${hl(showTitle, places, colours)}</span>` : ''}<div class="clamp" dir="auto">${hl(showBody, places, colours)}</div>`;
+  if (!tr) return main;
+  const orig = [titleAdds && text ? title : '', text || title].filter(Boolean).join('\n');
+  return `${main}<div class="orig" dir="auto"><span class="lbl">${esc(LANG[t.lang] || t.lang || 'original')} original</span>${esc(orig)}</div>`;
+}
+function locCell(s, colours) {
+  const raw = (s.location || {}).name || '—', a2 = day.locations[s.admin2Id || ''] || day.locations[s.admin1Id || ''];
+  // "Point 10.78, 34.19" says nothing to a judge; name the district it sits in instead.
+  const name = /^Point -?\d/.test(raw) && a2 ? a2.name : raw;
+  const ci = colours && colours.get(placeKey(name));
+  return ci ? `<mark class="pl c" style="--pc:var(--p${ci})" data-place="${esc(name.replace(/\s*\(unresolved\)/, ''))}">${esc(name)}</mark>` : esc(name);
 }
 function badges(s, merges, camps) {
   return (merges.has(s.id) ? `<span class="chip merge">merge ${merges.get(s.id)}</span>` : '') +
@@ -401,13 +611,15 @@ function renderMulti(list, q, merges, camps) {
   el.innerHTML = shown.map(c => {
     const v = answerFor(c) || {}, out = new Set(v.out || []), keep = c.signals.length - out.size;
     const allSel = c.signals.every(s => selected.has(s.id));
-    const span = md(c.at) === md(c.last) ? `${md(c.at)} ${hm(c.at)}–${hm(c.last)}` : `${md(c.at)} → ${md(c.last)}`;
-    const rows = c.signals.map(s => `
+    const timed = c.signals.filter(s => !dateOnly(s)), [t0, t1] = [timed[0], timed[timed.length - 1]].map(s => s && s.publishedAt);
+    const span = !timed.length ? `${md(c.at)} (date only)` : md(t0) === md(t1) ? `${md(t0)} ${hm(t0)}–${hm(t1)}` : `${md(t0)} → ${md(t1)}`;
+    const { colours, shared } = placeColours(c.signals);
+    const rows = c.signals.map((s, i) => `
       <tr data-sig="${s.id}" class="${out.has(s.id) ? 'out' : ''} ${open.has(s.id) ? 'open' : ''}">
-        <td class="mono">${hm(s.publishedAt)}</td>
+        <td class="mono">${timeCell(s, i + 1)}</td>
         <td><span class="chip src">${esc(SRC[s.source] || s.source)}</span>${s.glideCode ? `<span class="chip">${esc(s.glideCode)}</span>` : ''}${sevChip(s.severity)}</td>
-        <td class="loc">${esc((s.location || {}).name || '—')}</td>
-        <td class="txt">${textCell(s)}${badges(s, merges, camps)}${s.url && s.url.startsWith('http') ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ''}${jevLine(s)}</td>
+        <td class="loc">${locCell(s, colours)}${GEO ? `<div class="sub">${geoNote(c, i)}</div>` : ''}</td>
+        <td class="txt">${textCell(s, colours)}${badges(s, merges, camps)}${s.url && s.url.startsWith('http') ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ''}${jevLine(s)}</td>
         <td class="ck"><input type="checkbox" data-act="out" data-card="${esc(c.key)}" data-sig="${s.id}" ${out.has(s.id) ? 'checked' : ''} aria-label="not this one"></td>
       </tr>`).join('');
     const verdict = v.one
@@ -415,8 +627,9 @@ function renderMulti(list, q, merges, camps) {
       : `<button class="primary" data-act="one" data-card="${esc(c.key)}" ${keep < 2 ? 'disabled' : ''}>${out.size ? `Yes, the other ${keep} are one event` : 'Yes, one event'}</button>`;
     return `<article class="card ${v.one ? 'done' : ''} ${allSel ? 'sel' : ''}">
       <header><h2>${esc(c.title)} <span class="loc">· ${esc(c.location)}</span></h2>
-        <span class="stat">${span} · ${c.signals.length} signals${c.allDays && c.allDays > c.signals.length ? ` (${c.allDays} all days)` : ''}</span>
+        <span class="stat">${span} · ${c.signals.length} signals${c.allDays && c.allDays > c.signals.length ? ` today <span title="CLEAR's event also holds ${c.allDays - c.signals.length} signals from other days. Only this day's signals are shown and judged here." style="cursor:help;text-decoration:underline dotted">· ${c.allDays} incl. other days</span>` : ''}</span>
         ${sevChip(c.severity)}${c.types.length ? `<span class="chip">${esc(c.types.join(','))}</span>` : ''}</header>
+      ${geoStrip(c, shared)}
       <div class="tblwrap"><table><thead><tr><th>UTC</th><th>Src / type</th><th>Location</th><th>Signal</th><th>Not this one</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div class="verdict"><span class="q">Should ${out.size ? 'the unticked signals' : `these ${c.signals.length} signals`} be one event?</span>${verdict}
         <label><input type="checkbox" data-act="selcard" data-card="${esc(c.key)}" ${allSel ? 'checked' : ''}> select</label></div>
@@ -444,9 +657,9 @@ function renderSingle(list, q, merges, camps) {
       const s = c.signals[0];
       return `<tr data-sig="${s.id}" class="${selected.has(s.id) ? 'sel' : ''} ${c.dropped ? 'dropped' : ''} ${open.has(s.id) ? 'open' : ''}">
         <td class="ck"><input type="checkbox" data-act="sel" data-sig="${s.id}" ${selected.has(s.id) ? 'checked' : ''} aria-label="select"></td>
-        <td class="mono">${hm(s.publishedAt)}</td>
+        <td class="mono">${timeCell(s)}</td>
         <td><span class="chip src">${esc(SRC[s.source] || s.source)}</span>${s.glideCode ? `<span class="chip">${esc(s.glideCode)}</span>` : ''}${sevChip(c.severity)}${c.dropped ? `<span class="chip drop">${esc(c.outcome)}</span>` : ''}</td>
-        <td class="loc">${esc((s.location || {}).name || '—')}</td>
+        <td class="loc">${locCell(s)}</td>
         <td class="txt">${textCell(s)}${badges(s, merges, camps)}${s.url && s.url.startsWith('http') ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ''}${jevLine(s)}</td>
       </tr>`; }).join('')}</tbody></table>`).join('')}</div></div>`;
 }
@@ -631,9 +844,12 @@ document.addEventListener('change', e => {
   }
 });
 document.addEventListener('click', e => {
+  const mark = e.target.closest('mark[data-place]');
+  if (mark) { document.getElementById('q').value = mark.dataset.place; render(); window.scrollTo({ top: 0 }); return; }
   const b = e.target.closest('[data-act]');
   if (b && b.tagName === 'BUTTON') {
     const act = b.dataset.act;
+    if (act === 'bigmap') { openMap(b.dataset.card); return; }
     if (act === 'one') { cardEntry(b.dataset.card).one = true; save(); }
     if (act === 'unone') { cardEntry(b.dataset.card).one = false; save(); }
     if (act === 'delcard') { delete J.cards[b.dataset.card]; save(); }
@@ -666,6 +882,23 @@ document.getElementById('btnCamp').addEventListener('click', () => {
   selected.clear(); save();
 });
 document.getElementById('btnDeselect').addEventListener('click', () => { selected.clear(); render(); });
+
+let mapOpener = null;
+function openMap(k) {
+  const c = cardByKey(k);
+  if (!c) return;
+  mapOpener = document.activeElement;
+  document.getElementById('mtitle').textContent = c.title;
+  const sigs = [...c.signals].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+  document.getElementById('mbody').innerHTML = mapSvg(sigs, 960, 600, true) +
+    `<div class="legend">Numbers are the card's rows. Pin = exact point; shaded area = the signal only resolved to that district or state.</div>`;
+  document.getElementById('modal').hidden = false;
+  document.getElementById('mclose').focus();
+}
+function closeMap() { document.getElementById('modal').hidden = true; if (mapOpener) mapOpener.focus(); }
+document.getElementById('mclose').addEventListener('click', closeMap);
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeMap(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !document.getElementById('modal').hidden) closeMap(); });
 
 document.getElementById('tabs').addEventListener('click', e => {
   const b = e.target.closest('.tab'); if (!b) return;

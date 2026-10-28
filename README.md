@@ -1,77 +1,142 @@
 # clear-grouping-lab
 
-Private, local-only lab for testing how CLEAR clusters signals into events. It
-replays one country-day of real dev signals through candidate algorithms, lets a
-human judge which signals belong together, and scores every algorithm against
-those judgments. Context and language: the Exponential page
+CLEAR sends too many alerts because it splits one real-world occurrence into many
+events. This lab tests better ways of grouping signals into events. It takes one
+country-day of real signals, groups them with several candidate algorithms, asks
+people to judge which signals really belong together, and scores every algorithm
+against those judgments.
+
+There are two ways to take part:
+
+- **[Judging](#judging-no-install-needed)**: you get one HTML file, open it,
+  judge and send your answers back. No install, no keys, any computer.
+- **[Running the lab](#running-the-lab)**: fetch days, run algorithms, build
+  judging packs and score. Needs Python and two keys.
+
+Background: the Exponential page
 [How CLEAR groups signals into events](https://www.exponential.im/w/clear/pages/cmvqya771000hkx086k80ga6l)
-and decision D-0166. Glossary in [CONTEXT.md](CONTEXT.md). Session handoff in
+and decision D-0166. Glossary in [CONTEXT.md](CONTEXT.md), session handoff in
 [HANDOFF.md](HANDOFF.md).
 
-Non-negotiable constraints:
+## Judging (no install needed)
 
-- The code lives in the private repo `CLEAR-Initiative/clear-grouping-lab`, never in the public `clear-*` repos. Fetched data, layers, judgments and `.env` are gitignored and never pushed.
-- It runs read-only against the dev GraphQL API with keys in a local `.env` that is gitignored and never printed.
-- Nothing has to be merged into any repo to run it. Fetched data, layers and judgments stay in this directory.
+*This section is written so it can be pasted into an email to judges.*
 
-## Setup
+1. **Open the file** you were sent (for example `sudan-2026-10-20.html`) by
+   double-clicking it. It opens in your web browser. Chrome, Edge, Firefox and
+   Safari all work, and nothing is uploaded anywhere.
+2. **Type your name** in the *Judge* box at the top right.
+3. **Tab 1 · Grouped events.** Each card is one event that was built from
+   several signals (posts and reports). Read the rows. Tick **not this one** on
+   any signal that reports something different, then press **Yes, one event**.
+4. **Tab 2 · Single signals.** These are signals that ended up alone, sorted by
+   state. When two or more report the same thing, tick **select** on each and
+   press **Same event** at the bottom. Greyed rows were thrown away as
+   irrelevant; judge them like any other.
+5. **Tab 3 · My judgments.** Press **Download judgments** and email the
+   downloaded file (`2026-10-20.<your name>.json`) back.
 
-Python 3.9+ and nothing else (stdlib only). Copy `.env.example` to `.env` and fill
-`CLEAR_API_URL` and `CLEAR_API_KEY` from clear-pipeline's **dev** env, and one Jev key:
-`OPENROUTER_API_KEY` (an `sk-or-…` key, the route clear-pipeline uses) or
-`TYPESAFE_API_KEY` (a key from typesafe.ai, used directly when set).
-Then `python3 check_env.py` confirms the host is dev and the key is accepted, without
-printing either.
+What counts as "the same event": the **same thing happening**, at the same
+place and time, such as the same strike reported by three accounts. It is *not*
+the same actor or the same kind of attack in different places. When one group
+does the same thing in many places (a wave of drone strikes on power stations),
+select those signals and press **One campaign** instead.
 
-## Data stays local
+Good to know:
 
-`data/`, `layers/` and `judgments/` are gitignored; only code, docs and `seed/`
-are committed. `fetch_day.py` refuses any API host other than
-`dev-api.clearinitiative.io`, so a `.env` that points at production fails
-loudly instead of fetching. In Claude Code, `/fetch-day sudan 2026-10-21`
-runs the fetch and reports the counts (skill in `.claude/skills/fetch-day/`).
+- Your answers save in the browser as you go, so you can close the page and
+  come back. Use the same browser and the same file.
+- The *Layer* menu switches between algorithms. Your answers are about signals,
+  not cards, so any layer works. Stay on the first one unless asked otherwise.
+- The search box filters by text or place name, and selections survive a
+  search. That's the quickest way to find every post about one town.
+- Partial answers are useful. Download and send whatever you have.
+- The file contains real signal text. Please don't forward it.
 
-## The loop
+## Running the lab
 
-```bash
-python3 fetch_day.py --country sudan --date 2026-10-20
-```
-Writes `data/sudan/2026-10-20.json` (every located signal published that UTC day,
-and every event those signals belong to) and the `clear-as-run` layer. Slow on
-first run: the dev API has no date filter, so it pulls every located Sudan signal
-and filters locally.
+### One-time setup
 
-```bash
-python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1                      # 72h window
-python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1 --window-hours 168 --tag 7d
-python3 replay.py --country sudan --date 2026-10-20 --algo naive-state                 # no model, control
-```
-Each run writes `layers/sudan/2026-10-20.<name>.json`. Jev responses are cached
-under `layers/.cache/<prompt version>/`, so reruns with unchanged prompts are free.
-`--limit 20` is a cheap smoke test.
+1. **Get the code.** It is private to the CLEAR-Initiative GitHub org.
+   ```bash
+   gh repo clone CLEAR-Initiative/clear-grouping-lab
+   ```
+2. **Check Python.** You need 3.9 or newer and nothing else; the lab uses the
+   standard library only, so there's no `pip install`. On Windows, type `py`
+   wherever this README says `python3`, and install Python from python.org if
+   that command isn't found.
+   ```bash
+   python3 --version
+   ```
+3. **Add keys.** Copy `.env.example` to `.env` (gitignored) and fill in:
+   - `CLEAR_API_KEY`: the **dev** pipeline key (`sk_live_…`) from clear-pipeline's
+     dev env. Ask James. `CLEAR_API_URL` is already set to dev.
+   - one Jev key: `OPENROUTER_API_KEY` (`sk-or-…`, the route clear-pipeline uses)
+     or `TYPESAFE_API_KEY` (from typesafe.ai, used directly when set).
+4. **Check the keys** without printing them. Every line should say OK/set/yes.
+   ```bash
+   python3 check_env.py
+   ```
 
-```bash
-python3 -m http.server 8765
-# then open http://localhost:8765/viewer.html?day=sudan/2026-10-20
-```
-The viewer has three tabs. **Grouped events** shows each multi-signal event of the
-chosen layer as a table of its signals' original text: tick **not this one** on any
-signal that reports a different occurrence, then **Yes, one event** for the rest.
-**Single signals** lists every single-signal event plus every dropped signal (grey),
-grouped by state: select rows that report the same occurrence and press **Same
-event** (or **One campaign**) in the bottom bar; a grouped card can be selected too.
-**My judgments** lists every answer with undo, and downloads the file; move it into
-`judgments/sudan/` for scoring. The search box filters both lists, and a selection
-survives filter changes, so you can merge across states. Judgments are kept in the
-browser per day. Nothing on the page is pre-judged by a model.
+### Each day you study
 
-```bash
-python3 score.py --country sudan --date 2026-10-20 --all
-```
-Shape metrics for every layer (events, merge ratio, singleton share, projected
-alerts at severity 4+) and, once judgments exist, pair precision and recall and
-how many judged sets each layer keeps intact. Baseline to beat: merge ratio 1.2
-and about 41 alerts a day.
+Run these from the lab folder. Swap in the country and date you want.
+
+1. **Fetch the day** from the dev API. The first run is slow because the API has
+   no date filter. In Claude Code, `/fetch-day sudan 2026-10-21` does the same
+   and reports the counts.
+   ```bash
+   python3 fetch_day.py --country sudan --date 2026-10-20
+   ```
+2. **Run the algorithms.** Each run adds one layer. `naive-state` needs no
+   model. Jev responses are cached, so re-runs with unchanged prompts are free.
+   Add `--limit 20` for a cheap smoke test.
+   ```bash
+   python3 replay.py --country sudan --date 2026-10-20 --algo naive-state
+   ```
+   ```bash
+   python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1
+   ```
+   ```bash
+   python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1 --window-hours 168 --tag 7d
+   ```
+3. **Judge it yourself** in the viewer. Start the server, then open
+   <http://localhost:8765/viewer.html?day=sudan/2026-10-20>.
+   ```bash
+   python3 -m http.server 8765
+   ```
+4. **Send it to judges.** Build a pack: one HTML file with the day built in.
+   It writes `packs/sudan-2026-10-20.html` (gitignored, about 2–4 MB). Email it
+   with the [Judging](#judging-no-install-needed) section pasted in. Leave out
+   layers that would only confuse judges; `jev-v1-7d` is identical to `jev-v1`
+   until the window gap below is fixed.
+   ```bash
+   python3 make_pack.py --country sudan --date 2026-10-20 --layers clear-as-run,jev-v1,naive-state --send-to "James"
+   ```
+5. **Collect answers.** Save each returned `2026-10-20.<name>.json` into
+   `judgments/sudan/`. To check a judge's answers in the viewer, use
+   **Import file** on tab 3.
+6. **Score** every layer against every judgment file for the day.
+   ```bash
+   python3 score.py --country sudan --date 2026-10-20 --all
+   ```
+   This prints shape metrics for every layer (events, merge ratio, singleton
+   share, projected alerts at severity 4+). Once judgments exist, it adds pair
+   precision and recall and how many judged sets each layer keeps intact. The
+   baseline to beat is a merge ratio of 1.2 and about 41 alerts a day.
+
+### Rules that keep the data safe
+
+- Code lives only in the private repo `CLEAR-Initiative/clear-grouping-lab`,
+  never in the public `clear-*` repos.
+- `data/`, `layers/`, `judgments/`, `packs/` and `.env` are gitignored and never
+  pushed. Only code, docs and `seed/` are committed.
+- The lab is read-only against the dev API. `fetch_day.py` refuses any host other
+  than `dev-api.clearinitiative.io`, so a `.env` pointing at production fails
+  loudly instead of fetching.
+- Judging packs carry real signal text (including Dataminr). Send them only to
+  the people judging; don't post them in a shared drive or channel.
+- Nothing has to be merged into any other repo to run the lab.
 
 ## Decisions from the 27 Oct grilling
 
@@ -123,9 +188,10 @@ signalIds), `notes{}`. Signal-level, so one file scores every layer.
 | `fetch_day.py` | dev API → day file + `clear-as-run` layer |
 | `replay.py` | day file → candidate layers (`jev-v1`, `naive-state`) |
 | `viewer.html` | static judging UI |
+| `make_pack.py` | day + layers → one self-contained `packs/<country>-<date>.html` for judges |
 | `score.py` | layers × judgments → metrics |
 | `seed/` | the week's audit: labelled events, scored alerts, reports, old prototype UI |
-| `data/ layers/ judgments/` | generated, gitignored |
+| `data/ layers/ judgments/ packs/` | generated, gitignored |
 
 ## Known gaps (as of 27 Oct)
 

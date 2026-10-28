@@ -20,6 +20,14 @@ Algorithms
                its probability ≥ abs_threshold and it beats the runner-up by
                ≥ margin; otherwise new event, with the candidates recorded as
                links ("new-linked") so an analyst could merge later.
+  jev-fields   jev-v1 with structured characteristics. characterize.py first
+               pulls each signal's type, places, actors, occurredAt and scale;
+               the state then carries the signal's and each candidate event's
+               (aggregated from its signals), and the instructions ask for a
+               match on those fields: same type, overlapping places, same
+               occurredAt, same actors where stated. Same candidates, decision
+               rule and thresholds as jev-v1, so a score difference points at
+               the fields. Needs data/<country>/<date>.characteristics.json.
   naive-state  No model. Key = (state, glideCode) within the window. A cheap
                control that shows what an admin-1 fallback key would do (the
                page's idea 7, the one we said we would not ship).
@@ -41,7 +49,7 @@ Algorithms
                ≥ --sim-threshold and beats the runner-up by ≥ --sim-margin.
                Tests whether Jev does more than text similarity would.
 
-`--scope country` (jev-v1 and embed-v1) widens the candidate pool from the
+`--scope country` (jev-v1, jev-fields and embed-v1) widens the candidate pool from the
 signal's state to the whole country: same-state events first, then events
 from other states newest first, up to --max-candidates. It tests whether a
 mislocated signal misses its event because the right one is never offered.
@@ -88,7 +96,42 @@ from lab_common import (
     write_json,
 )
 
-PROMPT_VERSION = "jev-v2"  # v2: structured signal characteristics (characterize.py) fed into the state + weighed when grouping
+PROMPT_VERSION = "jev-v1.1"  # v1.1: admin names instead of landmark points in summaries
+
+SAME_EVENT_INSTRUCTIONS = (
+    "`signal` is one new report (an X post, alert or database row) from a crisis "
+    "monitoring feed. `events` lists recent events already known for the same area, "
+    "each with a short summary built from the reports it already contains. Which "
+    "listed event is `signal` reporting on? Pick the event that describes the SAME "
+    "real-world occurrence (same thing happening, same place, same time). A later "
+    "update, a different wording, a different source or a different detail about the "
+    "same occurrence still counts as the same event. Pick `none` when the report is "
+    "about a different occurrence, a roundup of many occurrences, or no specific occurrence."
+)
+MATCHES_ANY_INSTRUCTIONS = (
+    "Does `signal` report on the same real-world occurrence as at least one of the "
+    "events listed in `events`?"
+)
+MATCHES_ANY_CRITERIA = {
+    "true": "The report is about an occurrence that one of the listed events already describes.",
+    "false": "The report is about a different occurrence, or is a roundup, analysis or general statement.",
+}
+# Copied from clear-pipeline/providers/jev.py so the lab's relevance gate matches production.
+RELEVANT_INSTRUCTIONS = (
+    "Does `text` report an ACTUAL, CURRENT humanitarian, disaster, or security "
+    "incident — a real event that has happened or is happening?"
+)
+RELEVANT_CRITERIA = {
+    "true": "A concrete incident/event is described (e.g. a flood, clash, outbreak, strike).",
+    "false": "Routine news, analysis or opinion, a retrospective/anniversary, a "
+    "forecast or warning with no event yet, or an unrelated topic.",
+}
+NONE_CRITERION = "A different occurrence from every event listed, or no specific occurrence."
+
+# jev-fields: the same three questions, but the state also carries each signal's
+# characteristics (characterize.py) and each candidate event's aggregate, and the
+# instructions ask the model to match on those fields.
+FIELDS_PROMPT_VERSION = "jev-fields-v1"
 
 _CHARACTERISTICS_LEGEND = (
     "The signal's characteristics are in `signal.characteristics` when available, and each "
@@ -104,7 +147,7 @@ _CHARACTERISTICS_LEGEND = (
     "When `signal.characteristics` is absent, read these same characteristics from the "
     "signal text. A `type` of \"none\" marks a roundup / analysis / no specific occurrence.\n\n"
 )
-SAME_EVENT_INSTRUCTIONS = (
+FIELDS_SAME_EVENT_INSTRUCTIONS = (
     "`signal` is one new report (an X post, alert or database row) from a crisis "
     "monitoring feed. `events` lists recent events already known for the same area.\n\n"
     + _CHARACTERISTICS_LEGEND
@@ -118,33 +161,44 @@ SAME_EVENT_INSTRUCTIONS = (
     "or no specific occurrence. The same actor, or the same kind of attack in another place or "
     "on another day, is NOT the same event."
 )
-MATCHES_ANY_INSTRUCTIONS = (
+FIELDS_MATCHES_ANY_INSTRUCTIONS = (
     _CHARACTERISTICS_LEGEND
     + "Does `signal` report on the same real-world occurrence as at least one of the events "
     "listed in `events` — i.e. their characteristics line up on type, places and occurredAt "
     "(and actors/target where stated), not merely the same kind of event in a different place "
     "or on a different day?"
 )
-MATCHES_ANY_CRITERIA = {
+FIELDS_MATCHES_ANY_CRITERIA = {
     "true": "An event in `events` already describes the same occurrence: its what/where/when "
     "(and, where stated, actors/target) line up with the signal's.",
     "false": "Every listed event is a different occurrence (same kind of thing elsewhere or at "
     "another time, a different actor's action), or the signal is a roundup, analysis or general statement.",
 }
-# Copied from clear-pipeline/providers/jev.py so the lab's relevance gate matches production.
-RELEVANT_INSTRUCTIONS = (
-    "Does `text` report an ACTUAL, CURRENT humanitarian, disaster, or security "
-    "incident — a real event that has happened or is happening?"
-)
-RELEVANT_CRITERIA = {
-    "true": "A concrete incident/event is described (e.g. a flood, clash, outbreak, strike).",
-    "false": "Routine news, analysis or opinion, a retrospective/anniversary, a "
-    "forecast or warning with no event yet, or an unrelated topic.",
-}
-NONE_CRITERION = (
+FIELDS_NONE_CRITERION = (
     "A different occurrence from every event listed — a different what, where, when or actor — "
     "or no specific occurrence."
 )
+
+# The two Jev layers differ only in these prompts and in whether the state
+# carries characteristics; everything else in run_jev is shared.
+JEV_PROMPTS = {
+    "jev-v1": {
+        "version": PROMPT_VERSION,
+        "sameEvent": SAME_EVENT_INSTRUCTIONS,
+        "matchesAny": MATCHES_ANY_INSTRUCTIONS,
+        "matchesAnyCriteria": MATCHES_ANY_CRITERIA,
+        "none": NONE_CRITERION,
+        "fields": False,
+    },
+    "jev-fields": {
+        "version": FIELDS_PROMPT_VERSION,
+        "sameEvent": FIELDS_SAME_EVENT_INSTRUCTIONS,
+        "matchesAny": FIELDS_MATCHES_ANY_INSTRUCTIONS,
+        "matchesAnyCriteria": FIELDS_MATCHES_ANY_CRITERIA,
+        "none": FIELDS_NONE_CRITERION,
+        "fields": True,
+    },
+}
 
 
 # ── Jev transport (shape copied from clear-pipeline/providers/jev.py) ─────────
@@ -296,18 +350,18 @@ def place_name(signal: dict, hierarchy: Hierarchy) -> str | None:
     return hierarchy.name(signal.get("admin2Id")) or hierarchy.name(signal.get("admin1Id")) or loc.get("name")
 
 
-def load_characteristics(day: dict) -> dict[str, dict]:
-    """Per-signal characteristics from characterize.py, keyed by signal id.
-    Empty (with a hint) when the file is absent — grouping still runs, the model
-    just falls back to reading characteristics from the signal text."""
+def load_characteristics(day: dict) -> dict:
+    """characterize.py's file for the day: model, promptVersion and per-signal
+    characteristics keyed by signal id. jev-fields needs it, so a missing file
+    stops the run rather than quietly producing a text-only layer under the
+    fields name."""
     path = DATA / day["country"] / f"{day['date']}.characteristics.json"
     if not path.exists():
-        print(
-            f"  note: {path.name} not found — run characterize.py to feed structured "
-            "signal characteristics into grouping (falling back to text only)"
+        sys.exit(
+            f"{path.name} not found — run characterize.py --country {day['country']} "
+            f"--date {day['date']} before --algo jev-fields"
         )
-        return {}
-    return json.loads(path.read_text()).get("signals", {})
+    return json.loads(path.read_text())
 
 
 def _event_state(key: str, ev: ReplayEvent, chars_map: dict[str, dict]) -> dict:
@@ -349,14 +403,27 @@ SCOPE_DESCRIPTIONS = {
 }
 
 
-def run_jev(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayEvent], dict]:
+def run_jev(day: dict, params: dict, hierarchy: Hierarchy, variant: str = "jev-v1") -> tuple[list[ReplayEvent], dict]:
+    prompts = JEV_PROMPTS[variant]
     window = timedelta(hours=params["windowHours"])
     cache_dir = LAYERS / ".cache"
     events: list[ReplayEvent] = []
     decisions: dict[str, dict] = {}
     counter = 0
     total = len(day["signals"])
-    chars_map = load_characteristics(day)
+    # jev-v1 sends no characteristics, so its requests (and cache hits) are unchanged.
+    chars_map: dict[str, dict] = {}
+    if prompts["fields"]:
+        chars_file = load_characteristics(day)
+        chars_map = chars_file.get("signals", {})
+        covered = sum(1 for s in day["signals"] if s["id"] in chars_map)
+        params["characteristics"] = {
+            "model": chars_file.get("model"),
+            "promptVersion": chars_file.get("promptVersion"),
+            "coverage": f"{covered}/{total}",
+        }
+        if covered < total:
+            print(f"  note: {total - covered} signals have no characteristics; the model reads those from the text")
 
     for i, signal in enumerate(day["signals"], 1):
         if signal.get("retracted"):
@@ -390,17 +457,17 @@ def run_jev(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayE
         if keys:
             body["questions"]["same_event"] = {
                 "type": "choice",
-                "instructions": SAME_EVENT_INSTRUCTIONS,
-                "criteria": {**{k: ev.summary() for k, ev in keys.items()}, "none": NONE_CRITERION},
+                "instructions": prompts["sameEvent"],
+                "criteria": {**{k: ev.summary() for k, ev in keys.items()}, "none": prompts["none"]},
             }
             body["questions"]["matches_any"] = {
                 "type": "noul",
-                "instructions": MATCHES_ANY_INSTRUCTIONS,
-                "criteria": MATCHES_ANY_CRITERIA,
+                "instructions": prompts["matchesAny"],
+                "criteria": prompts["matchesAnyCriteria"],
             }
         # Cache is keyed by request body inside a per-prompt-version folder, so
-        # editing the instructions above (and bumping PROMPT_VERSION) refetches.
-        payload = jev_call(body, cache_dir=cache_dir / PROMPT_VERSION)
+        # editing the instructions above (and bumping its version) refetches.
+        payload = jev_call(body, cache_dir=cache_dir / prompts["version"])
         answers = payload["answers"]
 
         relevance = float(answers.get("relevant", {}).get("noul") or 0.0)
@@ -450,6 +517,10 @@ def run_jev(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayE
         if i % 20 == 0 or i == total:
             print(f"  {i}/{total} signals, {len(events)} events so far")
     return events, decisions
+
+
+def run_jev_fields(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayEvent], dict]:
+    return run_jev(day, params, hierarchy, "jev-fields")
 
 
 def run_naive_state(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayEvent], dict]:
@@ -721,6 +792,7 @@ def run_embed(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[Repla
 
 ALGOS = {
     "jev-v1": run_jev,
+    "jev-fields": run_jev_fields,
     "naive-state": run_naive_state,
     "v2-replay": run_v2,
     "v2-gazetteer": run_v2,
@@ -741,7 +813,7 @@ def main() -> None:
     parser.add_argument("--any-threshold", type=float, default=0.5)
     parser.add_argument("--link-threshold", type=float, default=0.2)
     parser.add_argument("--relevance-threshold", type=float, default=0.3, help="production default from signals/config.py")
-    parser.add_argument("--scope", choices=sorted(SCOPE_DESCRIPTIONS), default="state", help="candidate pool (jev-v1, embed-v1)")
+    parser.add_argument("--scope", choices=sorted(SCOPE_DESCRIPTIONS), default="state", help="candidate pool (jev-v1, jev-fields, embed-v1)")
     parser.add_argument("--type-level", type=int, choices=(1, 2), default=2, help="v2-*: key on type_level_2 (production) or type_level_1")
     parser.add_argument("--sim-threshold", type=float, default=0.78, help="embed-v1: join when the best cosine is at least this (0.78 ≈ the 99th percentile of random same-day pairs on Sudan 20 Oct)")
     parser.add_argument("--sim-margin", type=float, default=0.0, help="embed-v1: and beats the runner-up by this much")
@@ -758,7 +830,7 @@ def main() -> None:
     if args.window_hours is None:
         args.window_hours = 168 if args.algo.startswith("v2-") else 72
     params: dict = {"windowHours": args.window_hours}
-    if args.algo == "jev-v1":
+    if args.algo in JEV_PROMPTS:
         _, url, model = jev_provider()
         params.update({
             "maxCandidates": args.max_candidates,
@@ -769,7 +841,7 @@ def main() -> None:
             "relevanceThreshold": args.relevance_threshold,
             "model": model,
             "jevHost": url.split("//")[-1].split("/")[0],
-            "promptVersion": PROMPT_VERSION,
+            "promptVersion": JEV_PROMPTS[args.algo]["version"],
             "candidateScope": args.scope,
             "candidateScopeNote": SCOPE_DESCRIPTIONS[args.scope],
             "summary": "rule-built (first title, place, count, span, latest title)",

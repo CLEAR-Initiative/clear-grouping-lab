@@ -12,7 +12,7 @@ Responses are cached under data/.cache/<PROMPT_VERSION>/ by request hash, so
 re-runs and new days only pay for signals not seen before.
 
 Each signal is characterised ALONE, without seeing any other signal — this is
-extraction, not a grouping judgment. `replay.py` loads the result and feeds each
+extraction, not a grouping judgment. `replay.py --algo jev-fields` loads the result and feeds each
 signal's characteristics into the grouper's state so same-event decisions can
 compare what/where/when/who/scale, not only the raw text.
 

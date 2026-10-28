@@ -48,6 +48,12 @@ Good to know:
   come back. Use the same browser and the same file.
 - The *Layer* menu switches between algorithms. Your answers are about signals,
   not cards, so any layer works. Stay on the first one unless asked otherwise.
+- The *From* and *To* dates pick which days to show. A range shows every
+  day's signals together, so an event CLEAR spread over several days appears as
+  one card. Answers given on a range are kept for that range, separately from
+  single days. Stick to the dates you were asked to judge.
+- The *Text* menu switches between English with the original underneath,
+  English only, and the original only.
 - Posts in Arabic show an English machine translation, with the original in
   grey underneath. Place names that appear in more than one row of a card share
   a colour, even when spelled differently (Sali / Sally). Click a place name to
@@ -94,8 +100,9 @@ Good to know:
 Run these from the lab folder. Swap in the country and date you want.
 
 1. **Fetch the day** from the dev API. The first run is slow because the API has
-   no date filter. In Claude Code, `/fetch-day sudan 2026-10-21` does the same
-   and reports the counts.
+   no date filter. It also translates the day (step 3) when `OPENROUTER_API_KEY`
+   is set; add `--no-translate` to skip that. In Claude Code,
+   `/fetch-day sudan 2026-10-21` does the same and reports the counts.
    ```bash
    python3 fetch_day.py --country sudan --date 2026-10-20
    ```
@@ -116,7 +123,7 @@ Run these from the lab folder. Swap in the country and date you want.
    The comparison layers below each change one thing from `jev-v1` or from
    today's rule, so a difference in score points at that one thing. See
    [Layers](#layers) for what each one asks. `v2-gazetteer` reads the
-   translation file, so run it after step 3.
+   translation file, which step 1 writes (or step 3 by hand).
    ```bash
    python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1 --abs-threshold 0.7 --margin 0.25 --any-threshold 0.7 --tag strict
    ```
@@ -143,16 +150,23 @@ Run these from the lab folder. Swap in the country and date you want.
    ```
 3. **Translate the day** into English and list the places each signal names, so
    judges can read the Arabic posts and see which rows mention the same place.
-   One cached model call per signal through `OPENROUTER_API_KEY` (about two
-   minutes for a day; re-runs are free). The model sees one signal at a time and
-   only translates; the viewer shows the original under every translation.
+   `fetch_day.py` already does this; run it by hand for a day fetched with
+   `--no-translate` or without the key, or to retry failures. The viewer says
+   when a day has untranslated posts. One cached model call per signal through
+   `OPENROUTER_API_KEY` (about two minutes for a day; re-runs are free). The
+   model sees one signal at a time and only translates; the viewer shows the
+   original under every translation.
    `fetch_day.py` already refreshed `data/<country>/geo.json` for the maps
    (`python3 fetch_geo.py --country sudan` does it on its own).
    ```bash
    python3 translate.py --country sudan --date 2026-10-20
    ```
 4. **Judge it yourself** in the viewer. Start the server, then open
-   <http://localhost:8765/viewer.html?day=sudan/2026-10-20>.
+   <http://localhost:8765/viewer.html?day=sudan/2026-10-20>, or a range such as
+   `?day=sudan/2026-10-20..2026-10-23` (the *From*/*To* pickers do the same). A
+   range merges each day's layer: `clear-as-run` events that span days become
+   one card, and replayed layers keep each day's events apart. It only offers
+   layers run on every day in the range.
    ```bash
    python3 -m http.server 8765
    ```
@@ -169,7 +183,8 @@ Run these from the lab folder. Swap in the country and date you want.
    python3 make_pack.py --country sudan --date 2026-10-20 --layers clear-as-run,jev-v1,naive-state --send-to "James"
    ```
 6. **Collect answers.** Save each returned `2026-10-20.<name>.json` into
-   `judgments/sudan/`. To check a judge's answers in the viewer, use
+   `judgments/sudan/`. Answers given on a range come back as
+   `2026-10-20..2026-10-23.<name>.json` and go in the same folder. To check a judge's answers in the viewer, use
    **Import file** on tab 3.
 7. **Score** every layer against every judgment file for the day.
    ```bash
@@ -179,6 +194,8 @@ Run these from the lab folder. Swap in the country and date you want.
    share, projected alerts at severity 4+). Once judgments exist, it adds pair
    precision and recall and how many judged sets each layer keeps intact. The
    baseline to beat is a merge ratio of 1.2 and about 41 alerts a day.
+   Range files count for every day they cover, restricted to that day's
+   signals, since a one-day layer can't be scored on pairs across days.
 
 ### Rules that keep the data safe
 

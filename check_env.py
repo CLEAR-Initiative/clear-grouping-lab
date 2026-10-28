@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Verify .env without revealing it: which API host, whether the key is
-accepted, and whether OPENROUTER_API_KEY is set. Prints no secret values.
+accepted, and which model keys (Jev, Voyage) are set. Prints no secret values.
 
     python3 check_env.py
 """
@@ -20,6 +20,7 @@ print(f"CLEAR_API_KEY: {'set' if key else 'unset'}, {'looks like an API key (sk_
 ork, tsk = os.environ.get("OPENROUTER_API_KEY", ""), os.environ.get("TYPESAFE_API_KEY", "")
 print(f"OPENROUTER_API_KEY: {'set' if ork else 'unset'}" + ("" if not ork or ork.startswith("sk-or-") else " — but OpenRouter keys start with sk-or-; if this came from typesafe.ai put it in TYPESAFE_API_KEY instead"))
 print(f"TYPESAFE_API_KEY: {'set (replay.py will use TypeSafe directly)' if tsk else 'unset'}")
+print(f"VOYAGE_API_KEY: {'set' if os.environ.get('VOYAGE_API_KEY') else 'unset (only embed-v1 needs it)'}")
 try:
     me = graphql("query { me { email role } }")["me"]
     if me:

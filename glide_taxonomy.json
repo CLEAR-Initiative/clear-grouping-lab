@@ -1,0 +1,213 @@
+{
+ "source": "clear-pipeline origin/dev src/clear_pipeline/providers/event_categories.json (glide code -> type_level_1 / type_level_2)",
+ "codes": {
+  "ac": {
+   "l1": "technological disaster",
+   "l2": "technological disaster"
+  },
+  "av": {
+   "l1": "natural hazard",
+   "l2": "snow avalanche"
+  },
+  "ba": {
+   "l1": "conflict",
+   "l2": "battles"
+  },
+  "bg": {
+   "l1": "conflict",
+   "l2": "battles"
+  },
+  "bo": {
+   "l1": "conflict",
+   "l2": "battles"
+  },
+  "ce": {
+   "l1": "natural hazard",
+   "l2": "complex emergency"
+  },
+  "cw": {
+   "l1": "natural hazard",
+   "l2": "cold wave"
+  },
+  "dr": {
+   "l1": "natural hazard",
+   "l2": "drought"
+  },
+  "ec": {
+   "l1": "natural hazard",
+   "l2": "extratropical cyclone"
+  },
+  "ep": {
+   "l1": "epidemic",
+   "l2": "epidemic"
+  },
+  "eq": {
+   "l1": "natural hazard",
+   "l2": "earthquake"
+  },
+  "fa": {
+   "l1": "famine",
+   "l2": "famine"
+  },
+  "fc": {
+   "l1": "economic crisis",
+   "l2": "economic crisis"
+  },
+  "ff": {
+   "l1": "natural hazard",
+   "l2": "flash flood"
+  },
+  "fl": {
+   "l1": "natural hazard",
+   "l2": "flood"
+  },
+  "fr": {
+   "l1": "natural hazard",
+   "l2": "fire"
+  },
+  "ht": {
+   "l1": "natural hazard",
+   "l2": "heat wave"
+  },
+  "in": {
+   "l1": "natural hazard",
+   "l2": "insect infestation"
+  },
+  "ls": {
+   "l1": "natural hazard",
+   "l2": "land slide"
+  },
+  "ms": {
+   "l1": "natural hazard",
+   "l2": "mud slide"
+  },
+  "ot": {
+   "l1": "natural hazard",
+   "l2": "other"
+  },
+  "pa": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "pf": {
+   "l1": "conflict",
+   "l2": "protests"
+  },
+  "pg": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "ph": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "pi": {
+   "l1": "conflict",
+   "l2": "protests"
+  },
+  "pl": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "po": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "pp": {
+   "l1": "conflict",
+   "l2": "protests"
+  },
+  "pt": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "pv": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "pw": {
+   "l1": "conflict",
+   "l2": "strategic developments / political violence"
+  },
+  "rb": {
+   "l1": "conflict",
+   "l2": "explosions / remote violence"
+  },
+  "rc": {
+   "l1": "conflict",
+   "l2": "explosions / remote violence"
+  },
+  "rd": {
+   "l1": "conflict",
+   "l2": "riots"
+  },
+  "rg": {
+   "l1": "conflict",
+   "l2": "explosions / remote violence"
+  },
+  "ri": {
+   "l1": "conflict",
+   "l2": "riots"
+  },
+  "rl": {
+   "l1": "conflict",
+   "l2": "explosions / remote violence"
+  },
+  "rm": {
+   "l1": "conflict",
+   "l2": "explosions / remote violence"
+  },
+  "rs": {
+   "l1": "conflict",
+   "l2": "explosions / remote violence"
+  },
+  "sl": {
+   "l1": "natural hazard",
+   "l2": "slide"
+  },
+  "ss": {
+   "l1": "natural hazard",
+   "l2": "storm surge"
+  },
+  "st": {
+   "l1": "natural hazard",
+   "l2": "severe local storm"
+  },
+  "tc": {
+   "l1": "natural hazard",
+   "l2": "tropical cyclone"
+  },
+  "to": {
+   "l1": "natural hazard",
+   "l2": "tornado"
+  },
+  "ts": {
+   "l1": "natural hazard",
+   "l2": "tsunami"
+  },
+  "va": {
+   "l1": "conflict",
+   "l2": "violence against civilians"
+  },
+  "vd": {
+   "l1": "conflict",
+   "l2": "violence against civilians"
+  },
+  "vo": {
+   "l1": "natural hazard",
+   "l2": "volcano"
+  },
+  "vs": {
+   "l1": "conflict",
+   "l2": "violence against civilians"
+  },
+  "vw": {
+   "l1": "natural hazard",
+   "l2": "violent wind"
+  },
+  "wf": {
+   "l1": "natural hazard",
+   "l2": "wild fire"
+  }
+ }
+}

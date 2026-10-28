@@ -288,7 +288,7 @@ const PACK = window.LAB_PACK || null;
 if (PACK) document.getElementById('howtoSave').innerHTML = `Your answers save in this browser as you go, so you can close the page and come back. When you're done, press <b>Download judgments</b> and send <code id="fname"></code> to ${esc(PACK.sendTo || 'whoever sent you this page')}.`;
 async function getJson(path) {
   if (PACK) return PACK.files[path] || null;
-  const r = await fetch(path);
+  const r = await fetch(path, { cache: 'no-cache' });  // replay.py rewrites layers; always revalidate
   return r.ok ? r.json() : null;
 }
 let index = {}, sigById = new Map(), TR = {}, GEO = null;
@@ -569,7 +569,7 @@ function jevLine(s, name = current) {
   const d = ((layers[name] || {}).decisions || {})[s.id];
   if (!d || !d.outcome || d.outcome === 'dropped' && !d.candidates) return '';
   const cands = [...(d.candidates || [])].sort((a, b) => b.p - a.p);
-  const head = `${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}${d.matchesAny != null ? ` · matches any ${d.matchesAny}` : ''}${cands[0] ? ` · top ${cands[0].p}` : ''}`;
+  const head = `${esc(d.outcome)}${d.relevance != null ? ` · relevance ${d.relevance}` : ''}${d.matchesAny != null ? ` · matches any ${d.matchesAny}` : ''}${d.promotedTo ? ` · placed in ${esc(d.promotedTo)} by name` : ''}${cands[0] ? ` · top ${cands[0].p}` : ''}`;
   if (!cands.length) return `<div class="jev">${esc(name)}: ${head}</div>`;
   return `<div class="jev"><details><summary>${esc(name)}: ${head} · ${cands.length} candidates</summary><ul>${cands.map(c => `<li>${c.p} · ${esc(c.summary)}</li>`).join('')}</ul></details></div>`;
 }

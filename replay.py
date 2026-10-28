@@ -644,7 +644,7 @@ def main() -> None:
     parser.add_argument("--date", required=True)
     parser.add_argument("--algo", required=True, choices=sorted(ALGOS))
     parser.add_argument("--tag", help="suffix for the layer name, e.g. 7d → jev-v1-7d")
-    parser.add_argument("--window-hours", type=int, default=72)
+    parser.add_argument("--window-hours", type=int, help="open-event window; default 168 for v2-* (production's 7 days), else 72 (D-0166)")
     parser.add_argument("--max-candidates", type=int, default=40)
     parser.add_argument("--abs-threshold", type=float, default=0.5)
     parser.add_argument("--margin", type=float, default=0.15)
@@ -665,6 +665,8 @@ def main() -> None:
     if args.limit:
         day["signals"] = day["signals"][: args.limit]
     hierarchy = Hierarchy(day["locations"])
+    if args.window_hours is None:
+        args.window_hours = 168 if args.algo.startswith("v2-") else 72
     params: dict = {"windowHours": args.window_hours}
     if args.algo == "jev-v1":
         _, url, model = jev_provider()

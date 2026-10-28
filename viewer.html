@@ -26,7 +26,8 @@ h1{font-size:26px;margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
 .lede{color:var(--muted);max-width:72ch;margin:0}
 .setup{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end}
 .setup label{display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
-select,input[type=text],input[type=search]{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);color:var(--fg);min-width:0}
+.setup label[hidden]{display:none}
+select,input[type=text],input[type=search],input[type=date]{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);color:var(--fg);min-width:0}
 .tabs{position:sticky;top:0;background:var(--bg);z-index:5;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-block:10px;border-bottom:1px solid var(--line)}
 .tab{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
 .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
@@ -139,6 +140,11 @@ mark.pl{background:none;color:inherit;box-shadow:inset 0 -1px var(--muted);curso
 mark.pl.c{background:color-mix(in srgb,var(--pc) 16%,transparent);box-shadow:inset 0 -2px var(--pc);border-radius:2px}
 .orig{color:var(--muted);font-size:12.5px;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word;unicode-bidi:plaintext}
 tr.open .orig{-webkit-line-clamp:unset;display:block}
+body[data-text="en"] .orig{display:none}
+.notice{background:var(--surface);border:1px solid var(--warn);border-left-width:4px;border-radius:8px;padding:10px 14px;margin:12px 0 0;font-size:14px}
+.notice[hidden]{display:none}
+.notice.info{border-color:var(--line);border-left-color:var(--accent);color:var(--muted)}
+.notice.info b{color:var(--fg)}
 .orig .lbl{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-right:4px}
 .rn{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-fg);font-weight:600;font-size:11px;margin-right:6px;padding:0 4px}
 .donly{font-size:11px;border:1px dashed var(--line);border-radius:3px;padding:0 4px;cursor:help}
@@ -174,13 +180,22 @@ td.loc .sub{font-size:12px;margin-top:2px}
     <p class="lede">Judge how signals were grouped into events. Each card is one event as the chosen layer built it; every row is one original signal. Your judgments are about signals, so they score every layer at once. Nothing here is pre-judged by a model. Translations and place names are machine-made one signal at a time, with the original text shown underneath.</p>
   </div>
   <div class="setup">
-    <label>Day <select id="day"></select></label>
+    <label id="countryPick" hidden>Country <select id="country"></select></label>
+    <label>From <input id="from" type="date"></label>
+    <label>To <input id="to" type="date"></label>
     <label class="layerpick">Layer <select id="layer"></select></label>
     <a id="keyLink" class="keylink" href="layer-key/">What the layers do</a>
+    <label title="Machine translations come from translate.py, one signal at a time">Text <select id="textMode">
+      <option value="both">English + original</option>
+      <option value="en">English only</option>
+      <option value="orig">Original only</option>
+    </select></label>
     <label>Judge <input id="judge" type="text" size="10" placeholder="your name"></label>
   </div>
 </header>
 <div class="sum" id="sum"></div>
+<div class="notice info" id="rangeNote" hidden></div>
+<div class="notice" id="trNote" role="status" hidden></div>
 
 <nav class="tabs" role="tablist" id="tabs">
   <button class="tab" role="tab" data-tab="multi" aria-selected="true">1 · Grouped events<span class="n" id="n-multi"></span></button>
@@ -258,6 +273,8 @@ td.loc .sub{font-size:12px;margin-top:2px}
 //   merges[[signalIds]]                                             "same event" selections
 //   campaigns[{name, signalIds}]
 // The exported file adds the derived signal-level `same` and `apart` lists that score.py reads.
+// They are stored per view: one day (2026-10-20) or one range (2026-10-20..2026-10-23). score.py
+// reads both and keeps, for each day it scores, only that day's signals.
 let day = null, layers = {}, current = null;
 let selected = new Set();      // signal ids
 let open = new Set();          // expanded rows
@@ -308,24 +325,86 @@ async function getJson(path) {
   return r.ok ? r.json() : null;
 }
 let index = {}, sigById = new Map(), TR = {}, GEO = null;
+let textMode = 'both';
+try { textMode = localStorage.getItem('textMode') || 'both'; } catch (e) {}
+if (!['both', 'en', 'orig'].includes(textMode)) textMode = 'both';
+// Arabic posts with no translation would otherwise show untranslated with no hint why.
+const NON_LATIN = /[\u0590-\u08FF\u1200-\u137F]/;   // Hebrew/Arabic/Syriac/Thaana + Ethiopic (Amharic, Tigrinya)
+function translationNote() {
+  const untranslated = day.signals.filter(s => !TR[s.id] && NON_LATIN.test(`${s.title || ''} ${s.text || ''}`));
+  const missing = untranslated.length, el = document.getElementById('trNote');
+  el.hidden = !missing;
+  if (!missing) return;
+  const all = !Object.keys(TR).length, dates = [...new Set(untranslated.map(s => s.day))].sort();
+  const what = day.dates.length > 1 ? 'these days' : 'this day';
+  const fix = PACK ? 'Ask whoever sent you this file for a version with translations.'
+    : `Run <code>python3 translate.py --country ${esc(day.country)} --date ${esc(dates.length > 1 ? '<date>' : dates[0])}</code>${dates.length > 1 ? ` for ${dates.map(esc).join(', ')}` : ''} and reload${all ? '' : ' (only the missing ones are sent to the model)'}.`;
+  el.innerHTML = `<b>${all ? `No English translations for ${what}.` : `${missing} non-English signal${missing > 1 ? 's have' : ' has'} no translation.`}</b> ${all ? 'Posts' : 'Those posts'} show in their original language. ${fix}`;
+}
+let DAYS = {};   // country → sorted dates that have a day file registered in layers/index.json
+// ?day=sudan/2026-10-20 or ?day=sudan/2026-10-20..2026-10-23
+function parseSpec(spec) {
+  const m = /^([^/]+)\/(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?$/.exec(spec || '');
+  return m ? { country: m[1], from: m[2], to: m[3] || m[2] } : null;
+}
 async function boot() {
   index = await getJson('layers/index.json') || {};
-  const daySel = document.getElementById('day');
-  const days = Object.keys(index).sort();
-  const want = new URLSearchParams(location.search).get('day');
-  if (want && !days.includes(want)) days.push(want);
-  daySel.innerHTML = days.map(d => `<option>${esc(d)}</option>`).join('');
-  if (!days.length) { document.getElementById('multi').innerHTML = '<div class="empty">No days yet. Run <code>fetch_day.py</code> and <code>replay.py</code>, then reload.</div>'; return; }
-  daySel.value = want || days[days.length - 1];
-  const wantTab = new URLSearchParams(location.search).get('tab');   // read before loadDay rewrites the URL
-  await loadDay(daySel.value);
+  const want = parseSpec(new URLSearchParams(location.search).get('day'));
+  DAYS = {};
+  for (const k of Object.keys(index)) { const [c, d] = k.split('/'); (DAYS[c] = DAYS[c] || []).push(d); }
+  if (want) for (const d of [want.from, want.to]) if (!(DAYS[want.country] = DAYS[want.country] || []).includes(d)) DAYS[want.country].push(d);
+  Object.values(DAYS).forEach(ds => ds.sort());
+  const countries = Object.keys(DAYS).sort();
+  if (!countries.length) { document.getElementById('multi').innerHTML = '<div class="empty">No days yet. Run <code>fetch_day.py</code> and <code>replay.py</code>, then reload.</div>'; return; }
+  const cSel = document.getElementById('country');
+  cSel.innerHTML = countries.map(c => `<option>${esc(c)}</option>`).join('');
+  document.getElementById('countryPick').hidden = countries.length < 2;
+  const country = want ? want.country : countries[0], ds = DAYS[country];
+  cSel.value = country;
+  setPickers(country, want ? want.from : ds[ds.length - 1], want ? want.to : ds[ds.length - 1]);
+  const wantTab = new URLSearchParams(location.search).get('tab');   // read before loadRange rewrites the URL
+  await loadRange();
   const t = document.querySelector(`.tab[data-tab="${wantTab}"]`);
   if (t && !t.hidden) t.click();
 }
-async function loadDay(spec) {
-  const [country, date] = spec.split('/');
-  day = await getJson(`data/${country}/${date}.json`);
-  if (!day) { document.getElementById('multi').innerHTML = `<div class="empty">No day file at <code>data/${esc(country)}/${esc(date)}.json</code>. Run <code>fetch_day.py</code> first.</div>`; return; }
+function setPickers(country, from, to) {
+  const ds = DAYS[country] || [], f = document.getElementById('from'), t = document.getElementById('to');
+  for (const el of [f, t]) { el.min = ds[0] || ''; el.max = ds[ds.length - 1] || ''; }
+  f.value = from; t.value = to;
+}
+// clear-as-run's ids are CLEAR's own event ids, so an event seen on several days is one card.
+// Replayed layers number events L1, L2… afresh each day, so their ids get the date in front.
+function mergeLayers(name, parts) {
+  if (parts.length === 1) return parts[0][1];
+  const stable = name === 'clear-as-run', byId = new Map(), decisions = {};
+  for (const [date, l] of parts) {
+    Object.assign(decisions, l.decisions || {});
+    for (const ev of l.events) {
+      const id = stable ? ev.id : `${date}:${ev.id}`, prev = byId.get(id);
+      if (!prev) { byId.set(id, { ...ev, id, signalIds: [...ev.signalIds] }); continue; }
+      prev.signalIds.push(...ev.signalIds.filter(x => !prev.signalIds.includes(x)));
+      prev.memberCountAllDays = Math.max(prev.memberCountAllDays || 0, ev.memberCountAllDays || 0);
+    }
+  }
+  return { ...parts[parts.length - 1][1], events: [...byId.values()], decisions };
+}
+async function loadRange() {
+  const country = document.getElementById('country').value;
+  let from = document.getElementById('from').value, to = document.getElementById('to').value || from;
+  if (!from) from = to;
+  if (from > to) [from, to] = [to, from];
+  const dates = (DAYS[country] || []).filter(d => d >= from && d <= to);
+  const files = await Promise.all(dates.map(d => getJson(`data/${country}/${d}.json`)));
+  const got = dates.filter((d, i) => files[i]);
+  if (!got.length) {
+    day = null;
+    document.getElementById('multi').innerHTML = `<div class="empty">No day files for ${esc(country)} between ${esc(from)} and ${esc(to)}. Run <code>fetch_day.py</code> first.</div>`;
+    return;
+  }
+  const seen = new Set(), signals = [];
+  files.forEach((f, i) => f && f.signals.forEach(x => { if (!seen.has(x.id)) { seen.add(x.id); signals.push({ ...x, day: dates[i] }); } }));
+  const last = files.filter(Boolean).pop();
+  day = { country, date: got.length > 1 ? `${got[0]}..${got[got.length - 1]}` : got[0], dates: got, locations: last.locations, signals };
   sigById = new Map(day.signals.map(s => [s.id, s]));
   // Source filter: options are the day's exact source values (e.g. sudan-war-x), most signals first.
   const srcCounts = {};
@@ -335,17 +414,22 @@ async function loadDay(spec) {
     .map(([v, n]) => `<option value="${esc(v)}">${esc(v)}${SRC[v] ? ` (${esc(SRC[v])})` : ''} · ${n}</option>`).join('');
   srcSel.value = srcCounts[wantSrc] ? wantSrc : '';
   // Optional extras: translate.py's English text + place names, fetch_geo.py's outlines for the maps.
-  TR = ((await getJson(`data/${country}/${date}.translations.json`)) || {}).signals || {};
+  TR = Object.assign({}, ...(await Promise.all(got.map(d => getJson(`data/${country}/${d}.translations.json`)))).map(t => (t || {}).signals || {}));
+  translationNote();
   GEO = await getJson(`data/${country}/geo.json`);
+  // A range shows only the layers run on every one of its days, so every layer groups the same signals.
+  const names = [...new Set(got.flatMap(d => index[`${country}/${d}`] || []))];
+  const full = names.filter(n => got.every(d => (index[`${country}/${d}`] || []).includes(n)));
   layers = {};
-  for (const name of index[spec] || []) {
-    const layer = await getJson(`layers/${country}/${date}.${name}.json`);
-    if (layer) layers[name] = layer;
+  for (const name of full) {
+    const parts = (await Promise.all(got.map(async d => [d, await getJson(`layers/${country}/${d}.${name}.json`)]))).filter(([, l]) => l);
+    if (parts.length === got.length) layers[name] = mergeLayers(name, parts);
   }
+  rangeNote(names.filter(n => !layers[n]), dates.filter(d => !got.includes(d)));
   const sel = document.getElementById('layer');
   sel.innerHTML = Object.keys(layers).map(n => `<option>${esc(n)}</option>`).join('');
   const wantLayer = new URLSearchParams(location.search).get('layer');
-  current = layers[wantLayer] ? wantLayer : Object.keys(layers)[0] || null;
+  current = layers[wantLayer] ? wantLayer : layers[current] ? current : Object.keys(layers)[0] || null;
   sel.value = current || '';
   pickVs(new URLSearchParams(location.search).get('vs'));
   selected.clear(); open.clear();
@@ -353,11 +437,21 @@ async function loadDay(spec) {
   syncUrl();
   render();
 }
+function rangeNote(partial, noFile) {
+  const el = document.getElementById('rangeNote'), multi = day.dates.length > 1;
+  el.hidden = !multi && !partial.length && !noFile.length;
+  if (el.hidden) return;
+  el.innerHTML = [
+    multi ? `<b>${day.dates.length} days.</b> Judgments made on this view are saved for exactly ${esc(day.dates[0])} to ${esc(day.dates[day.dates.length - 1])}, separately from single days; score.py counts them for each day they cover.` : '',
+    partial.length ? `Hidden because they were not run on every day shown: ${partial.map(n => `<code>${esc(n)}</code>`).join(', ')}.${PACK ? '' : ' Run <code>replay.py</code> for the missing days to see them here.'}` : '',
+    noFile.length ? `No day file for ${noFile.map(esc).join(', ')}.` : ''
+  ].filter(Boolean).join(' ');
+}
 function syncUrl() {
   if (!day) return;
   const cmp = tab === 'compare' && vs ? `&tab=compare&vs=${encodeURIComponent(vs)}` : '';
   const src = document.getElementById('src').value;
-  document.getElementById('keyLink').href = `layer-key/?day=${day.country}/${day.date}${current ? '#' + encodeURIComponent(current) : ''}`;
+  document.getElementById('keyLink').href = `layer-key/?day=${day.country}/${day.dates[day.dates.length - 1]}${current ? '#' + encodeURIComponent(current) : ''}`;
   try { history.replaceState(null, '', `?day=${day.country}/${day.date}${current ? '&layer=' + encodeURIComponent(current) : ''}${src ? '&src=' + encodeURIComponent(src) : ''}${cmp}`); } catch (e) {}
 }
 
@@ -565,20 +659,21 @@ const SRC = { 'sudan-war-x': 'X', dataminr: 'DM', acled: 'ACLED', darfur24: 'D24
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function hm(iso) { return iso ? iso.slice(11, 16) : '?'; }
 function md(iso) { return iso ? iso.slice(5, 10) : '?'; }
+function when(iso) { return day && day.dates.length > 1 ? `${md(iso)} ${hm(iso)}` : hm(iso); }   // date too when the view spans days
 function sevChip(v) { return v == null ? '' : `<span class="chip ${v >= 4 ? 'sev4' : ''}">sev ${v}</span>`; }
 
 const LANG = { ar: 'Arabic', fr: 'French', en: 'English', am: 'Amharic', ti: 'Tigrinya' };
 // ACLED rows carry a date, not a time; they arrive stamped 00:00:00 and would read as midnight.
 function dateOnly(s) { return s.source === 'acled' || /T00:00:00(\.000)?Z$/.test(s.publishedAt || ''); }
 function timeCell(s, n) {
-  return `${n ? `<span class="rn">${n}</span>` : ''}${dateOnly(s) ? `<span class="donly" title="This source gives the date only, not a time">date only</span>` : hm(s.publishedAt)}`;
+  return `${n ? `<span class="rn">${n}</span>` : ''}${dateOnly(s) ? `<span class="donly" title="This source gives the date only, not a time">${day.dates.length > 1 ? `${md(s.publishedAt)} ` : ''}date only</span>` : when(s.publishedAt)}`;
 }
 // English first (translated when the original isn't), the original underneath in grey.
 function textCell(s, colours) {
   const text = (s.text || '').trim(), title = (s.title || '').trim();
   const titleAdds = title && !title.endsWith('…') && !text.startsWith(title.slice(0, 40));
   const t = TR[s.id], places = (t && t.places) || [];
-  const tr = t && (t.title || t.text) ? { title: (t.title || '').trim(), text: (t.text || '').trim() } : null;
+  const tr = textMode !== 'orig' && t && (t.title || t.text) ? { title: (t.title || '').trim(), text: (t.text || '').trim() } : null;
   const [showTitle, showBody] = tr ? [titleAdds && tr.text ? tr.title : '', tr.text || tr.title] : [titleAdds && text ? title : '', text || title];
   const main = `${showTitle ? `<span class="ttl" dir="auto">${hl(showTitle, places, colours)}</span>` : ''}<div class="clamp" dir="auto">${hl(showBody, places, colours)}</div>`;
   if (!tr) return main;
@@ -610,9 +705,9 @@ function render() {
   const all = cards(), q = document.getElementById('q').value.trim().toLowerCase();
   const multi = all.filter(c => c.signals.length > 1), single = all.filter(c => c.signals.length === 1);
   const events = all.filter(c => !c.dropped), assigned = events.reduce((n, c) => n + c.signals.length, 0);
-  document.getElementById('h1').textContent = `Grouping lab: ${day.country[0].toUpperCase() + day.country.slice(1)}, ${day.date}`;
+  document.getElementById('h1').textContent = `Grouping lab: ${day.country[0].toUpperCase() + day.country.slice(1)}, ${day.dates.length > 1 ? `${day.dates[0]} → ${day.dates[day.dates.length - 1]}` : day.date}`;
   document.getElementById('sum').innerHTML = [
-    [day.signals.length, 'signals that day'], [events.length, `events in ${current}`],
+    [day.signals.length, day.dates.length > 1 ? `signals in ${day.dates.length} days` : 'signals that day'], [events.length, `events in ${current}`],
     [(events.length ? assigned / events.length : 0).toFixed(2), 'merge ratio (baseline 1.2)'],
     [all.length - events.length, 'signals dropped'], [events.filter(c => (c.severity ?? 0) >= 4).length, 'events at severity ≥ 4']
   ].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
@@ -658,7 +753,7 @@ function renderMulti(list, q, merges, camps) {
       : `<button class="primary" data-act="one" data-card="${esc(c.key)}" ${keep < 2 ? 'disabled' : ''}>${out.size ? `Yes, the other ${keep} are one event` : 'Yes, one event'}</button>`;
     return `<article class="card ${v.one ? 'done' : ''} ${allSel ? 'sel' : ''}">
       <header><h2>${esc(c.title)} <span class="loc">· ${esc(c.location)}</span></h2>
-        <span class="stat">${span} · ${c.signals.length} signals${c.allDays && c.allDays > c.signals.length ? ` today <span title="CLEAR's event also holds ${c.allDays - c.signals.length} signals from other days. Only this day's signals are shown and judged here." style="cursor:help;text-decoration:underline dotted">· ${c.allDays} incl. other days</span>` : ''}</span>
+        <span class="stat">${span} · ${c.signals.length} signals${c.allDays && c.allDays > c.signals.length ? ` ${day.dates.length > 1 ? 'shown' : 'today'} <span title="CLEAR's event also holds ${c.allDays - c.signals.length} signals from other days. Only signals from the days shown are judged here; widen the date range to see more." style="cursor:help;text-decoration:underline dotted">· ${c.allDays} incl. other days</span>` : ''}</span>
         ${sevChip(c.severity)}${c.types.length ? `<span class="chip">${esc(c.types.join(','))}</span>` : ''}</header>
       ${geoStrip(c, shared)}
       <div class="tblwrap"><table><thead><tr><th>UTC</th><th>Src / type</th><th>Location</th><th>Signal</th><th>Not this one</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -699,7 +794,7 @@ function sigLabel(id) {
   const s = sigById.get(id);
   if (!s) return `<span class="stat">${esc(id)}</span>`;
   const t = (s.text || s.title || '').replace(/\s+/g, ' ').slice(0, 110);
-  return `<span class="stat">${hm(s.publishedAt)} ${esc(SRC[s.source] || s.source)}</span> <bdi>${esc(t)}${t.length >= 110 ? '…' : ''}</bdi>`;
+  return `<span class="stat">${when(s.publishedAt)} ${esc(SRC[s.source] || s.source)}</span> <bdi>${esc(t)}${t.length >= 110 ? '…' : ''}</bdi>`;
 }
 function renderJudgments() {
   const name = (document.getElementById('judge').value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
@@ -785,7 +880,7 @@ function renderCompare(q, merges, camps) {
   // Summary: each layer's shape above its own column, then where they agree.
   const tiles = (list, p) => {
     const evs = list.filter(c => !c.dropped), n = evs.reduce((a, c) => a + c.signals.length, 0);
-    const t = [[day.signals.length, 'signals that day'], [evs.length, 'events'],
+    const t = [[day.signals.length, day.dates.length > 1 ? `signals in ${day.dates.length} days` : 'signals that day'], [evs.length, 'events'],
       [(evs.length ? n / evs.length : 0).toFixed(2), 'merge ratio (baseline 1.2)'], [evs.filter(c => c.signals.length > 1).length, 'events with 2+ signals'],
       [list.length - evs.length, 'signals dropped'], [evs.filter(c => (c.severity ?? 0) >= 4).length, 'events at severity ≥ 4']];
     if (judged.length) t.push([`${right(p)}/${judged.length}`, 'your judged pairs it gets right']);
@@ -823,7 +918,7 @@ function cmpSide(name, cs, num, merges, camps) {
   const evs = cs.filter(c => !c.dropped).sort(byCard), drops = cs.filter(c => c.dropped);
   const row = (s, c) => `<tr data-sig="${s.id}" class="${selected.has(s.id) ? 'sel' : ''} ${c.dropped ? 'dropped' : ''} ${open.has(s.id) ? 'open' : ''}">
       <td class="ck"><input type="checkbox" data-act="sel" data-sig="${s.id}" ${selected.has(s.id) ? 'checked' : ''} aria-label="select"></td>
-      <td class="mono"><span class="sn">${num.get(s.id)}</span>${hm(s.publishedAt)}</td>
+      <td class="mono"><span class="sn">${num.get(s.id)}</span>${when(s.publishedAt)}</td>
       <td>${srcChips(s)}${c.dropped ? `<span class="chip drop">${esc(c.outcome)}</span>` : ''}</td>
       <td class="loc">${esc((s.location || {}).name || '—')}</td>
       <td class="txt">${textCell(s)}${badges(s, merges, camps)}${srcLink(s)}${jevLine(s, name)}</td>
@@ -948,7 +1043,29 @@ document.getElementById('tabs').addEventListener('click', e => {
 for (const id of ['q', 'hideDoneMulti', 'showDropped', 'hideMerged', 'order']) document.getElementById(id).addEventListener('input', render);
 document.getElementById('src').addEventListener('change', () => { syncUrl(); render(); });
 document.getElementById('layer').addEventListener('change', e => { current = e.target.value; pickVs(vs); syncUrl(); render(); });
-document.getElementById('day').addEventListener('change', e => loadDay(e.target.value));
+document.getElementById('country').addEventListener('change', e => {
+  const ds = DAYS[e.target.value] || [];
+  setPickers(e.target.value, ds[ds.length - 1], ds[ds.length - 1]);
+  loadRange();
+});
+// Moving one end past the other drags the other with it, so the range is never backwards.
+document.getElementById('from').addEventListener('change', e => {
+  const to = document.getElementById('to');
+  if (e.target.value && to.value < e.target.value) to.value = e.target.value;
+  loadRange();
+});
+document.getElementById('to').addEventListener('change', e => {
+  const from = document.getElementById('from');
+  if (e.target.value && from.value > e.target.value) from.value = e.target.value;
+  loadRange();
+});
+const textSel = document.getElementById('textMode');
+textSel.value = document.body.dataset.text = textMode;
+textSel.addEventListener('change', e => {
+  textMode = document.body.dataset.text = e.target.value;
+  try { localStorage.setItem('textMode', textMode); } catch (x) {}
+  render();
+});
 document.getElementById('judge').addEventListener('input', e => { try { localStorage.setItem('judge', e.target.value); } catch (x) {} if (tab === 'judg') renderJudgments(); });
 
 document.getElementById('btnExport').addEventListener('click', () => {
@@ -961,7 +1078,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
   }
   const name = (judge.value || 'anon').trim().replace(/[^a-z0-9_-]/gi, '_');
   const { same, apart } = derived();
-  const out = { country: day.country, date: day.date, name, createdAt: new Date().toISOString(), layersSeen: Object.keys(layers),
+  const out = { country: day.country, date: day.date, dates: day.dates, name, createdAt: new Date().toISOString(), layersSeen: Object.keys(layers),
                 same, apart, campaigns: J.campaigns, notes: J.notes, cards: J.cards, merges: J.merges,
                 legacySame: J.legacySame, legacyApart: J.legacyApart };
   const a = document.createElement('a');
@@ -973,14 +1090,14 @@ document.getElementById('btnExport').addEventListener('click', () => {
 document.getElementById('import').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   const j = JSON.parse(await f.text());
-  if (day && (j.country !== day.country || j.date !== day.date)) { alert('That file is for a different day.'); return; }
+  if (day && (j.country !== day.country || j.date !== day.date)) { alert(`That file is for ${j.country} ${j.date}; this page shows ${day.country} ${day.date}. Pick the same dates first.`); return; }
   J = adopt(j);
   if (j.name) { document.getElementById('judge').value = j.name; try { localStorage.setItem('judge', j.name); } catch (x) {} }
   e.target.value = '';
   save();
 });
 document.getElementById('btnClear').addEventListener('click', () => {
-  if (!day || !confirm('Clear every judgment for this day in this browser? Download first if you want to keep them.')) return;
+  if (!day || !confirm(`Clear every judgment for ${day.dates.length > 1 ? 'this date range' : 'this day'} in this browser? Download first if you want to keep them.`)) return;
   J = blank(); selected.clear(); save();
 });
 

@@ -177,8 +177,8 @@ Run these from the lab folder. Swap in the country and date you want.
    It writes `packs/sudan-2026-10-20.html` (gitignored, about 2–4 MB) and builds
    in the translations and map outlines when they exist. Email it
    with the [Judging](#judging-no-install-needed) section pasted in. Leave out
-   layers that would only confuse judges; `jev-v1-7d` is identical to `jev-v1`
-   until the window gap below is fixed.
+   layers that would only confuse judges; on a single day `jev-v1-7d` is
+   identical to `jev-v1` (compare windows with a range replay instead).
    ```bash
    python3 make_pack.py --country sudan --date 2026-10-20 --layers clear-as-run,jev-v1,naive-state --send-to "James"
    ```
@@ -196,6 +196,33 @@ Run these from the lab folder. Swap in the country and date you want.
    baseline to beat is a merge ratio of 1.2 and about 41 alerts a day.
    Range files count for every day they cover, restricted to that day's
    signals, since a one-day layer can't be scored on pairs across days.
+
+### A range of days in one pass
+
+A single day starts with no open events, so it can't show how grouping behaves
+over a week, or test the 72-hour window against 7 days. `--from`/`--to` replays
+every day in the range in one pass, in publication order, with events staying
+open across days. It works for every `--algo`, and Jev and embedding caches are
+shared with the single-day runs. Every day in the range must be fetched first.
+
+```bash
+python3 replay.py --country sudan --from 2026-10-20 --to 2026-10-27 --algo v2-replay
+```
+
+The layer is named after its days (`v2-replay-1020-1027`) so replays of different
+ranges don't overwrite each other; `--tag` replaces that suffix. It's written as
+one file per day, each holding the events with a signal that day, and the event
+ids are shared across the files. Open the range in the viewer
+(`?day=sudan/2026-10-20..2026-10-27`) and an event that spans days is one card.
+`score.py` scores each day's file as usual.
+
+`--relocate <file>` swaps signal fields before the replay, to measure a location
+change: a JSON object `{signalId: {field: value}}`, for example `admin1Id`,
+`admin2Id` and `location`. The layer records which file and how many signals.
+
+```bash
+python3 replay.py --country sudan --from 2026-10-20 --to 2026-10-27 --algo v2-replay --relocate relocate.json --tag 1020-1027-relocated
+```
 
 ### Testing the location step
 
@@ -267,7 +294,8 @@ which downloads `data/geonames/<CC>.txt` over HTTPS and prints its SHA-256.
 Every algorithm walks the day's signals once, in publication order, and for
 each one either joins an event it has already built that day or starts a new
 one. No decision is revisited. Replayed algorithms start the day with no open
-events. The model-free ones reuse CLEAR's relevance verdict, so they drop
+events; a [range replay](#a-range-of-days-in-one-pass) starts its first day
+with none and carries events across the rest. The model-free ones reuse CLEAR's relevance verdict, so they drop
 exactly the signals CLEAR dropped; Jev asks its own relevance question.
 <http://localhost:8765/layer-key> shows the same breakdown with each layer's
 settings and the day's numbers.
@@ -305,7 +333,8 @@ CLEAR's own relevance verdict, so they drop exactly the signals CLEAR dropped.
 | `embed-v1` | `jev-v1` | Cosine similarity of Voyage embeddings to the closest signal of each candidate, instead of Jev | Is Jev doing more than text similarity? |
 | `embed-v1-matched` | `jev-v1` | `embed-v1` with the threshold lowered to 0.665, where its merge ratio equals `jev-v1`'s | The same question at equal merge levels, so pair precision compares like with like |
 
-`jev-v1-7d` stays identical to `jev-v1` until multi-day replay exists.
+On a single day `jev-v1-7d` is identical to `jev-v1`; replay a range to compare
+the windows.
 
 `v2-gazetteer` uses the place names `translate.py` already lists for the viewer,
 standing in for idea 6's location prompt that returns every place it finds.
@@ -339,7 +368,9 @@ location, signalIds, signalIdsInDay).
 severity, types, firstAt, lastAt), `decisions{signalId}` (outcome: joined | new |
 new-linked | no-candidates | no-district | dropped | retracted; eventId; relevance; matchesAny;
 noneP; candidates[] with eventId, summary, p; linked[]; for `v2-*`, key and
-promotedTo). `layers/index.json` lists the layers per day for the viewer.
+promotedTo). `layers/index.json` lists the layers per day for the viewer. A
+range replay's files also carry `range` (from, to), `stableIds: true` and, on each
+event, `memberCountAllDays`; its `signalIds` are that day's only.
 
 **Translations** `data/<country>/<date>.translations.json`: `model`,
 `promptVersion`, `createdAt`, `signals{signalId}` (lang, title, text, places[]).
@@ -381,12 +412,14 @@ branchDistrict; `compare` with `--compare`; placeNameAr, arabic, arabicPath with
 | `seed/` | the week's audit: labelled events, scored alerts, reports, old prototype UI |
 | `data/ layers/ judgments/ packs/` | generated, gitignored |
 
-## Known gaps (as of 27 Oct)
+## Known gaps (as of 29 Oct)
 
-- **The window can't be tested on one day.** `replay.py` starts with no open
-  events, so every candidate comes from the same day and the 72h and 7d layers
-  are identical. Testing the window needs consecutive days fetched and replayed
-  in sequence, seeding each day with the previous day's events. Not built yet.
+- **A range starts empty.** A range replay opens no events from before its
+  first day, so the first day or two of a range group less than production,
+  which carries a week of open events. Start the range a few days early when
+  the first days matter.
+- **Scores are per day.** `score.py` scores a range layer one day at a time,
+  so a judged pair split across two days isn't counted.
 - **Projected alerts are not comparable across layers.** `clear-as-run` carries
   CLEAR's event severity (Claude's estimate); replay layers only have signal
   severities, which are null for most X posts, so their alert count reads low.

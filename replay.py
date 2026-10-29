@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Replay one day's signals through a candidate clustering algorithm and write
-a layer: layers/<country>/<date>.<algo>[-<tag>].json
+"""Replay one day's signals, or a range of days in one pass, through a
+candidate clustering algorithm and write a layer:
+layers/<country>/<date>.<algo>[-<tag>].json (one file per day for a range)
 
     python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1
     python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1 --window-hours 168 --tag 7d
     python3 replay.py --country sudan --date 2026-10-20 --algo naive-state   # no model calls
+    python3 replay.py --country sudan --from 2026-10-20 --to 2026-10-27 --algo v2-replay
 
 Algorithms
   jev-v1       Per signal, in publishedAt order: collect open events (built so
@@ -63,6 +65,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from pathlib import Path
 import math
 import os
 import re
@@ -80,6 +83,7 @@ from lab_common import (
     Hierarchy,
     layer_path,
     load_day,
+    load_range,
     load_env,
     now_iso,
     parse_iso,
@@ -472,10 +476,12 @@ def run_v2(day: dict, params: dict, hierarchy: Hierarchy) -> tuple[list[ReplayEv
     taxonomy = glide_taxonomy()
     gazetteer = places = None
     if params["gazetteer"]:
-        tr_path = DATA / day["country"] / f"{day['date']}.translations.json"
-        if not tr_path.exists():
-            sys.exit(f"v2-gazetteer needs {tr_path} for each signal's place names; run translate.py first")
-        places = {sid: t.get("places") or [] for sid, t in json.loads(tr_path.read_text())["signals"].items()}
+        places = {}
+        for d in day.get("dates") or [day["date"]]:
+            tr_path = DATA / day["country"] / f"{d}.translations.json"
+            if not tr_path.exists():
+                sys.exit(f"v2-gazetteer needs {tr_path} for each signal's place names; run translate.py first")
+            places.update({sid: t.get("places") or [] for sid, t in json.loads(tr_path.read_text())["signals"].items()})
         gazetteer = Gazetteer(hierarchy)
     events: list[ReplayEvent] = []
     keys: dict[str, tuple[str, str]] = {}  # event id → (district, family) of its first signal
@@ -641,7 +647,10 @@ ALGOS = {
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--country", required=True)
-    parser.add_argument("--date", required=True)
+    parser.add_argument("--date", help="one day (YYYY-MM-DD); or replay a range with --from/--to")
+    parser.add_argument("--from", dest="start", help="first day of a range replayed in one pass, events staying open across days")
+    parser.add_argument("--to", dest="end", help="last day of the range (inclusive)")
+    parser.add_argument("--relocate", help="JSON file {signalId: {field: value}} merged into those signals before the replay, e.g. admin1Id/admin2Id/location from a location experiment")
     parser.add_argument("--algo", required=True, choices=sorted(ALGOS))
     parser.add_argument("--tag", help="suffix for the layer name, e.g. 7d → jev-v1-7d")
     parser.add_argument("--window-hours", type=int, help="open-event window; default 168 for v2-* (production's 7 days), else 72 (D-0166)")
@@ -659,9 +668,16 @@ def main() -> None:
     parser.add_argument("--embed-dims", type=int, default=1024, help="embed-v1: clear-pipeline's default")
     parser.add_argument("--limit", type=int, help="only replay the first N signals (smoke test)")
     args = parser.parse_args()
+    if bool(args.date) == bool(args.start or args.end) or bool(args.start) != bool(args.end):
+        parser.error("give --date, or both --from and --to")
 
     load_env()
-    day = load_day(args.country, args.date)
+    day = load_day(args.country, args.date) if args.date else load_range(args.country, args.start, args.end)
+    relocated = 0
+    if args.relocate:
+        overrides = json.loads(Path(args.relocate).read_text())
+        day["signals"] = [{**s, **overrides[s["id"]]} if s["id"] in overrides else s for s in day["signals"]]
+        relocated = sum(1 for s in day["signals"] if s["id"] in overrides)
     if args.limit:
         day["signals"] = day["signals"][: args.limit]
     hierarchy = Hierarchy(day["locations"])
@@ -706,22 +722,32 @@ def main() -> None:
         })
     else:
         params["relevance"] = "CLEAR's own verdict"
-    name = f"{args.algo}-{args.tag}" if args.tag else args.algo
+    if args.relocate:
+        params["relocated"] = {"file": Path(args.relocate).name, "signals": relocated}
+    tag = args.tag
+    if tag is None and not args.date:
+        # A range's layer names its days, so replays of different ranges don't overwrite each other.
+        tag = f"{args.start[5:].replace('-', '')}-{args.end[5:].replace('-', '')}"
+    name = f"{args.algo}-{tag}" if tag else args.algo
     print(f"replaying {len(day['signals'])} signals with {name} …")
     events, decisions = ALGOS[args.algo](day, params, hierarchy)
 
-    layer = {
-        "algo": name,
-        "params": params,
-        "country": args.country,
-        "date": args.date,
-        "createdAt": now_iso(),
-        "events": [ev.to_json(hierarchy) for ev in events],
-        "decisions": decisions,
-    }
-    out = layer_path(args.country, args.date, name)
-    write_json(out, layer)
-    register_layer(args.country, args.date, name)
+    if args.date:
+        layer = {
+            "algo": name,
+            "params": params,
+            "country": args.country,
+            "date": args.date,
+            "createdAt": now_iso(),
+            "events": [ev.to_json(hierarchy) for ev in events],
+            "decisions": decisions,
+        }
+        out = layer_path(args.country, args.date, name)
+        write_json(out, layer)
+        register_layer(args.country, args.date, name)
+    else:
+        paths = write_range_layers(args.country, day, name, params, [ev.to_json(hierarchy) for ev in events], decisions)
+        out = f"{paths[0].parent}/{{{','.join(day['dates'])}}}.{name}.json"
     assigned = sum(len(ev.signals) for ev in events)
     outcomes: dict[str, int] = {}
     for d in decisions.values():
@@ -729,6 +755,40 @@ def main() -> None:
     print(f"wrote {out}")
     print(f"  events={len(events)} signals_assigned={assigned} merge_ratio={assigned / len(events) if events else 0:.2f}")
     print(f"  outcomes: {outcomes}")
+
+
+def write_range_layers(country: str, day: dict, name: str, params: dict, events: list[dict], decisions: dict) -> list[Path]:
+    """Split a range replay into one ordinary layer file per day, so the viewer,
+    score.py and make_pack.py read it like any other layer. Each day's file
+    keeps the events that have a signal that day, with only that day's
+    signalIds and `memberCountAllDays` for the whole event. Event ids are
+    stable across the files (`stableIds`), so the viewer reunites an event
+    that spans days into one card when it shows the range."""
+    day_of = {s["id"]: s["day"] for s in day["signals"]}
+    span = {"from": day["dates"][0], "to": day["dates"][-1]}
+    paths = []
+    for d in day["dates"]:
+        day_events = []
+        for ev in events:
+            ids = [sid for sid in ev["signalIds"] if day_of.get(sid) == d]
+            if ids:
+                day_events.append({**ev, "signalIds": ids, "memberCountAllDays": len(ev["signalIds"])})
+        layer = {
+            "algo": name,
+            "params": params,
+            "country": country,
+            "date": d,
+            "range": span,
+            "stableIds": True,
+            "createdAt": now_iso(),
+            "events": day_events,
+            "decisions": {sid: dec for sid, dec in decisions.items() if day_of.get(sid) == d},
+        }
+        out = layer_path(country, d, name)
+        write_json(out, layer)
+        register_layer(country, d, name)
+        paths.append(out)
+    return paths
 
 
 if __name__ == "__main__":

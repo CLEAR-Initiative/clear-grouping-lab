@@ -158,7 +158,7 @@ Run these from the lab folder. Swap in the country and date you want.
    ```
    <http://localhost:8765/layer-key> explains every layer step by step, with the
    day's numbers and settings read from the layer files. The viewer links to it
-   as *What the layers do*.
+   as *(key)* next to the Layer menu, opening in a new window.
 5. **Send it to judges.** Build a pack: one HTML file with the day built in.
    It writes `packs/sudan-2026-10-20.html` (gitignored, about 2–4 MB) and builds
    in the translations and map outlines when they exist. Email it

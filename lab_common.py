@@ -12,7 +12,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date as Date, datetime, timedelta, timezone
 from pathlib import Path
 
 LAB = Path(__file__).resolve().parent
@@ -90,6 +90,38 @@ def load_day(country: str, date: str) -> dict:
     if not path.exists():
         sys.exit(f"no day file at {path} — run fetch_day.py --country {country} --date {date}")
     return json.loads(path.read_text())
+
+
+def dates_between(start: str, end: str) -> list[str]:
+    """Every calendar date from start to end inclusive, as YYYY-MM-DD."""
+    first, last = Date.fromisoformat(start), Date.fromisoformat(end)
+    if first > last:
+        sys.exit(f"--from {start} is after --to {end}")
+    return [(first + timedelta(days=i)).isoformat() for i in range((last - first).days + 1)]
+
+
+def load_range(country: str, start: str, end: str) -> dict:
+    """Several day files as one day: every signal in publication order, the
+    union of their location trees, and `dates` listing the days. `date` is
+    "<start>..<end>", the same label the viewer uses for a range. Exits if a
+    day in the range hasn't been fetched, so a gap can't pass for a quiet day."""
+    dates = dates_between(start, end)
+    missing = [d for d in dates if not day_path(country, d).exists()]
+    if missing:
+        sys.exit(f"no day files for {', '.join(missing)} — run fetch_day.py for each")
+    signals: list[dict] = []
+    locations: dict[str, dict] = {}
+    seen: set[str] = set()
+    for d in dates:
+        day = load_day(country, d)
+        locations.update(day["locations"])
+        for signal in day["signals"]:
+            if signal["id"] not in seen:
+                seen.add(signal["id"])
+                signals.append({**signal, "day": d})
+    signals.sort(key=lambda s: s["publishedAt"])
+    return {"country": country, "date": f"{start}..{end}", "dates": dates,
+            "locations": locations, "signals": signals}
 
 
 def write_json(path: Path, payload: dict) -> None:

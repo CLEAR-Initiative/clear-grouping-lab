@@ -34,7 +34,7 @@ select,input[type=text],input[type=search],input[type=date]{font:inherit;font-si
 .tab .n{font-family:var(--font-mono);font-size:11px;opacity:.8;margin-left:4px}
 .tabs input[type=search]{flex:0 1 220px;margin-left:8px}
 .tabs #src{flex:0 1 auto}
-.keylink{font-size:12px;padding-bottom:7px;color:var(--accent)}
+.keylink{color:var(--accent);text-transform:none;letter-spacing:0;font-weight:500}
 .progress{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
 button:focus-visible,input:focus-visible,select:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 section.panel{padding-block:16px}
@@ -183,8 +183,7 @@ td.loc .sub{font-size:12px;margin-top:2px}
     <label id="countryPick" hidden>Country <select id="country"></select></label>
     <label>From <input id="from" type="date"></label>
     <label>To <input id="to" type="date"></label>
-    <label class="layerpick">Layer <select id="layer"></select></label>
-    <a id="keyLink" class="keylink" href="layer-key/">What the layers do</a>
+    <label class="layerpick"><span>Layer<span id="keyWrap"> - <a id="keyLink" class="keylink" href="layer-key/" target="_blank" rel="noopener" title="What each layer does (opens in a new window)">(key)</a></span></span> <select id="layer"></select></label>
     <label title="Machine translations come from translate.py, one signal at a time">Text <select id="textMode">
       <option value="both">English + original</option>
       <option value="en">English only</option>
@@ -835,7 +834,7 @@ function renderJudgments() {
 // signals on both sides and shows how each layer split them. Hidden in packs, so judges aren't steered.
 let vs = null;
 if (PACK) document.querySelector('.tab[data-tab="compare"]').hidden = true;
-if (PACK) document.getElementById('keyLink').hidden = true;  // the key reads layer files from the server
+if (PACK) document.getElementById('keyWrap').hidden = true;  // the key reads layer files from the server
 function pickVs(want) {
   const names = Object.keys(layers).filter(n => n !== current), sel = document.getElementById('vs');
   vs = names.includes(want) ? want : names.includes('clear-as-run') ? 'clear-as-run' : names[0] || null;

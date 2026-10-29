@@ -197,6 +197,36 @@ Run these from the lab folder. Swap in the country and date you want.
    Range files count for every day they cover, restricted to that day's
    signals, since a one-day layer can't be scored on pairs across days.
 
+### Testing the location step
+
+`geo_eval.py` dry-runs clear-pipeline's location step for text-only signals
+(Claude picks a state or district, and the place it names is geocoded inside
+that area) over a range of fetched days, and compares the result with what
+CLEAR stored. Results and method: the Exponential page
+[Placing text-only signals: sudan-war-x location test](https://www.exponential.im/w/clear/pages/cmvtb71tx002ijs08tw7r9j5e).
+
+It runs clear-pipeline's own code, so unlike the rest of the lab it needs that
+checkout and its environment (Python 3.11 and `uv`), on a `dev` that includes
+the area-checked locator (merged in clear-pipeline #140). It writes nothing to
+CLEAR: point creation is replaced by a district lookup in `geo.json`, the
+gazetteer and geocoder cache are only read, and LocationIQ caches locally.
+The location call goes through `OPENROUTER_API_KEY` (Haiku 4.5 by default,
+cached, so reruns are free).
+```bash
+uv run --project ../clear-pipeline python geo_eval.py --country sudan --from 2026-10-20 --to 2026-10-27
+```
+Add `--locationiq` to let LocationIQ run (set `LOCATIONIQ_API_KEY` in `.env`;
+it is rate-limited to one call a second). It reports which lookup placed each
+post and how many upstream calls that cost. `--compare` also asks LocationIQ
+about every post the gazetteer placed and reports how far apart the answers are.
+```bash
+uv run --project ../clear-pipeline python geo_eval.py --country sudan --from 2026-10-20 --to 2026-10-27 --locationiq --compare --tag liq
+```
+`--arabic` adds the Arabic-first prototype (GeoNames' Arabic names, checked
+against Claude's English spelling). The first run needs `--fetch-geonames`,
+which downloads `data/geonames/<CC>.txt` over HTTPS and prints its SHA-256.
+`--limit 20` makes a cheap smoke test.
+
 ### Rules that keep the data safe
 
 - Code lives only in the private repo `CLEAR-Initiative/clear-grouping-lab`,
@@ -325,6 +355,13 @@ resolve to. Shared by every day of the country.
 ids that are one event), `apart[]` (pairs that are not), `campaigns[]` (name,
 signalIds), `notes{}`. Signal-level, so one file scores every layer.
 
+**Location test** `data/<country>/geo-eval/<from>_<to>[.<tag>].json`: `params`,
+`countryCode`, `pipeline` (the checkout tested), `stats` (LocationIQ calls and
+cache hits, with `--locationiq`), `signals[]` (id, asrun / asrunLevel, areaId,
+placeName, outcome, gazetteerHit, geocode with its tier, branch / branchLevel /
+branchDistrict; `compare` with `--compare`; placeNameAr, arabic, arabicPath with
+`--arabic`). Point ids are `pt|<districtId>|<name>`, since nothing is created.
+
 ## Layout
 
 | File | Role |
@@ -340,6 +377,7 @@ signalIds), `notes{}`. Signal-level, so one file scores every layer.
 | `compare.html` | short link to the viewer's *Compare layers* tab: two layers side by side, grouped by the signals either one merged, e.g. `compare.html?day=sudan/2026-10-20&layer=jev-v1` (left defaults to `clear-as-run`; `&vs=` picks another). Hidden in packs |
 | `make_pack.py` | day + layers → one self-contained `packs/<country>-<date>.html` for judges |
 | `score.py` | layers × judgments → metrics |
+| `geo_eval.py` | days → dry run of clear-pipeline's location step for one source (runs under clear-pipeline's environment) |
 | `seed/` | the week's audit: labelled events, scored alerts, reports, old prototype UI |
 | `data/ layers/ judgments/ packs/` | generated, gitignored |
 

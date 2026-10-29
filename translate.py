@@ -5,6 +5,9 @@ for the viewer: data/<country>/<date>.translations.json
     python3 translate.py --country sudan --date 2026-10-20
     python3 translate.py --country sudan --date 2026-10-20 --limit 10   # smoke test
 
+fetch_day.py runs this automatically after a fetch (skip with --no-translate);
+run it by hand to retry failures or to translate a day fetched before that.
+
 One model call per signal through OpenRouter (OPENROUTER_API_KEY, the key the
 lab already uses for Jev). TRANSLATE_MODEL overrides the default model.
 Responses are cached under data/.cache/<PROMPT_VERSION>/ by request hash, so
@@ -90,19 +93,13 @@ def call(body: dict, *, cache_dir, key: str, retries: int = 4, timeout: float = 
     raise RuntimeError(last)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--country", required=True)
-    parser.add_argument("--date", required=True)
-    parser.add_argument("--limit", type=int, help="only the first N signals (smoke test)")
-    parser.add_argument("--workers", type=int, default=8)
-    args = parser.parse_args()
-
+def translate_day(country: str, date: str, *, limit: int | None = None, workers: int = 8) -> None:
+    """Translate one fetched day and merge the result into its translations file."""
     load_env()
     key = require_env("OPENROUTER_API_KEY")
     model = os.environ.get("TRANSLATE_MODEL", DEFAULT_MODEL)
-    day = load_day(args.country, args.date)
-    signals = day["signals"][: args.limit] if args.limit else day["signals"]
+    day = load_day(country, date)
+    signals = day["signals"][:limit] if limit else day["signals"]
     cache_dir = DATA / ".cache" / PROMPT_VERSION
     cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -134,7 +131,7 @@ def main() -> None:
     print(f"translating {len(signals)} signals with {model} …")
     out: dict[str, dict] = {}
     failed: list[str] = []
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         for n, (sid, entry, err) in enumerate(pool.map(one, signals), 1):
             if entry is None:
                 failed.append(f"{sid}: {err}")
@@ -143,7 +140,7 @@ def main() -> None:
             if n % 25 == 0 or n == len(signals):
                 print(f"  {n}/{len(signals)}")
 
-    path = DATA / args.country / f"{args.date}.translations.json"
+    path = DATA / country / f"{date}.translations.json"
     # Merge into an earlier run with the same model and prompt, so a --limit smoke test or a
     # partly failed run never throws away translations the viewer and packs already use.
     if path.exists():
@@ -160,6 +157,16 @@ def main() -> None:
         print(f"  {len(failed)} failed (re-run to retry; cached ones are free):")
         for line in failed[:10]:
             print(f"    {line[:200]}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--country", required=True)
+    parser.add_argument("--date", required=True)
+    parser.add_argument("--limit", type=int, help="only the first N signals (smoke test)")
+    parser.add_argument("--workers", type=int, default=8)
+    args = parser.parse_args()
+    translate_day(args.country, args.date, limit=args.limit, workers=args.workers)
 
 
 if __name__ == "__main__":

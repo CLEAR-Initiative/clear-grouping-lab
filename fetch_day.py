@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Fetch one country-day from the dev CLEAR API into data/<country>/<date>.json
 and derive the `clear-as-run` layer from it. Also refreshes data/<country>/geo.json
-(fetch_geo.py) so the viewer can map the day's signals.
+(fetch_geo.py) so the viewer can map the day's signals, and translates the day
+(translate.py, cached) so judges can read the Arabic posts.
 
     python3 fetch_day.py --country sudan --date 2026-10-20
+    python3 fetch_day.py --country sudan --date 2026-10-20 --no-translate
 
 Read-only. The dev API has no date-filtered signal query, so this pulls every
 signal located inside the country (signalsByLocation walks descendants) and
@@ -40,6 +42,7 @@ from lab_common import (
     register_layer,
     write_json,
 )
+from translate import translate_day
 
 DEV_HOST = "dev-api.clearinitiative.io"
 
@@ -122,6 +125,7 @@ def main() -> None:
     parser.add_argument("--country", required=True, choices=sorted(COUNTRY_IDS))
     parser.add_argument("--date", required=True, help="UTC calendar date, YYYY-MM-DD")
     parser.add_argument("--allow-host", help="host to accept besides the dev API (normally never needed)")
+    parser.add_argument("--no-translate", action="store_true", help="skip translate.py (run it later by hand)")
     args = parser.parse_args()
 
     load_env()
@@ -255,6 +259,15 @@ def main() -> None:
 
     # Outlines and points for the viewer's per-card maps (cheap after the first day).
     update_geo(args.country)
+
+    # English text and place names for the viewer and v2-gazetteer. The fetch has already
+    # succeeded, so a missing key only skips this step instead of failing the run.
+    if args.no_translate:
+        print(f"translate: skipped; run python3 translate.py --country {args.country} --date {args.date}")
+    elif not os.environ.get("OPENROUTER_API_KEY"):
+        print("translate: skipped, OPENROUTER_API_KEY is not set in .env; the viewer will show the original text")
+    else:
+        translate_day(args.country, args.date)
 
 
 if __name__ == "__main__":

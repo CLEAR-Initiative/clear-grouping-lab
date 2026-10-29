@@ -16,7 +16,8 @@ share, projected alerts). With judgments:
   conflicts       judged pairs where a "same" set and an "apart" pair disagree
 
 Judgments are signal-level, so one judgments file scores every layer for the
-day. Baseline to beat (week of 20–27 Oct, Sudan): merge ratio 1.2, ~41 alerts a day.
+day. Files the viewer saved for a date range (<from>..<to>.<judge>.json) count
+for every day they cover, restricted to that day's signals. Baseline to beat (week of 20–27 Oct, Sudan): merge ratio 1.2, ~41 alerts a day.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import re
 import sys
 
 from lab_common import JUDGMENTS, LAYERS, layer_path, load_day
@@ -46,19 +48,36 @@ class UnionFind:
             self.parent[ra] = rb
 
 
-def load_judgments(country: str, date: str, name: str | None) -> dict | None:
+JUDGMENT_FILE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?\.([^.]+)\.json$")
+
+
+def load_judgments(country: str, date: str, name: str | None, day_ids: set[str]) -> dict | None:
+    """Every judgments file covering `date`: single-day files (<date>.<judge>.json) and the
+    viewer's date-range files (<from>..<to>.<judge>.json). A range file also judges other
+    days' signals, so only this day's signals are kept; a pair across days can't be scored
+    against a one-day layer."""
     folder = JUDGMENTS / country
     if not folder.exists():
         return None
-    files = sorted(folder.glob(f"{date}.{name or '*'}.json"))
+    files = []
+    for f in sorted(folder.glob("*.json")):
+        m = JUDGMENT_FILE.match(f.name)
+        if not m:
+            if f.name.startswith(date):
+                print(f"note: skipping {f.name}; expected <date>.<judge>.json or <from>..<to>.<judge>.json", file=sys.stderr)
+        elif m.group(1) <= date <= (m.group(2) or m.group(1)) and (name is None or m.group(3) == name):
+            files.append(f)
     if not files:
         return None
     merged = {"same": [], "apart": [], "campaigns": [], "files": []}
     for f in files:
         j = json.loads(f.read_text())
-        merged["same"] += j.get("same", [])
-        merged["apart"] += j.get("apart", [])
-        merged["campaigns"] += j.get("campaigns", [])
+        merged["same"] += [g for g in ([i for i in grp if i in day_ids] for grp in j.get("same", [])) if len(g) > 1]
+        merged["apart"] += [p for p in j.get("apart", []) if all(i in day_ids for i in p)]
+        for c in j.get("campaigns", []):
+            ids = [i for i in c.get("signalIds", []) if i in day_ids]
+            if ids:
+                merged["campaigns"].append({**c, "signalIds": ids})
         merged["files"].append(f.name)
     return merged
 
@@ -178,7 +197,7 @@ def main() -> None:
         parser.error("give --layer or --all")
 
     day = load_day(args.country, args.date)
-    judgments = load_judgments(args.country, args.date, args.judgments)
+    judgments = load_judgments(args.country, args.date, args.judgments, {s["id"] for s in day["signals"]})
     if args.all:
         index_path = LAYERS / "index.json"
         index = json.loads(index_path.read_text()) if index_path.exists() else {}

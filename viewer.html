@@ -372,11 +372,12 @@ function setPickers(country, from, to) {
   for (const el of [f, t]) { el.min = ds[0] || ''; el.max = ds[ds.length - 1] || ''; }
   f.value = from; t.value = to;
 }
-// clear-as-run's ids are CLEAR's own event ids, so an event seen on several days is one card.
-// Replayed layers number events L1, L2… afresh each day, so their ids get the date in front.
+// clear-as-run's ids are CLEAR's own event ids, and a range replay (replay.py --from/--to) marks
+// its ids stableIds, so an event seen on several days is one card. Single-day replays number
+// events L1, L2… afresh each day, so their ids get the date in front.
 function mergeLayers(name, parts) {
   if (parts.length === 1) return parts[0][1];
-  const stable = name === 'clear-as-run', byId = new Map(), decisions = {};
+  const stable = name === 'clear-as-run' || parts.every(([, l]) => l.stableIds), byId = new Map(), decisions = {};
   for (const [date, l] of parts) {
     Object.assign(decisions, l.decisions || {});
     for (const ev of l.events) {

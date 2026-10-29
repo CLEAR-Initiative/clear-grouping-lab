@@ -21,6 +21,7 @@ ork, tsk = os.environ.get("OPENROUTER_API_KEY", ""), os.environ.get("TYPESAFE_AP
 print(f"OPENROUTER_API_KEY: {'set' if ork else 'unset'}" + ("" if not ork or ork.startswith("sk-or-") else " — but OpenRouter keys start with sk-or-; if this came from typesafe.ai put it in TYPESAFE_API_KEY instead"))
 print(f"TYPESAFE_API_KEY: {'set (replay.py will use TypeSafe directly)' if tsk else 'unset'}")
 print(f"VOYAGE_API_KEY: {'set' if os.environ.get('VOYAGE_API_KEY') else 'unset (only embed-v1 needs it)'}")
+print(f"LOCATIONIQ_API_KEY: {'set' if os.environ.get('LOCATIONIQ_API_KEY') else 'unset (only geo_eval.py --locationiq needs it)'}")
 try:
     me = graphql("query { me { email role } }")["me"]
     if me:

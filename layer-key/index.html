@@ -224,6 +224,20 @@ const KEY = {
     question: 'Do signals placed in the wrong state miss their event because it is never offered? (The Mujlad market strike landed in four places.)',
     note: 'On 20 Oct it made 10 joins across states, several of them the Mujlad / Abyei strike; a couple look wrong.',
   },
+  'jev-fields': {
+    fam: 'jev', one: 'jev-v1, comparing extracted what / where / when / who',
+    change: 'Jev compares structured characteristics, not only text and summaries',
+    steps: [
+      'Before the replay, <code>characterize.py</code> reads each signal on its own and pulls out: <b>type</b> (what happened, or "none" for a roundup or analysis), <b>places</b>, <b>actors</b>, <b>occurredAt</b> (when it happened, not when it was reported) and <b>scale</b>.',
+      'Candidates exactly as jev-v1 (same state, window, cap).',
+      'Each candidate also carries its event\'s combined characteristics: the first real type, every place and actor its signals name, and the earliest occurredAt.',
+      'The same three Jev questions as jev-v1, but the instructions ask for a match on the fields: same type, overlapping places, same occurredAt, and the same actors where both state them. The same actor, or the same kind of attack in another place or on another day, is <b>not</b> the same event.',
+      'Same decision rule and thresholds as jev-v1.',
+    ],
+    vs: 'jev-v1',
+    question: 'Does matching on fields stop same-kind-elsewhere merges (one actor\'s strikes in two towns) without splitting events that really are one?',
+    note: 'An event\'s occurredAt is its earliest signal\'s, so an event that spans days can look like a different date to a later report. Watch for split events when judging.',
+  },
   'embed-v1': {
     fam: 'emb', one: 'Join the most similar candidate by text embedding',
     change: 'Cosine similarity instead of Jev',
@@ -254,6 +268,7 @@ const PARAM_LABELS = [
   ['simThreshold', 'similarity ≥'], ['simMargin', 'lead ≥'], ['simLinkThreshold', 'link ≥'],
   ['typeLevel', 'type level', v => v === 1 ? '1 (top: conflict…)' : '2 (family)'], ['gazetteer', 'gazetteer', v => v ? 'on' : 'off'],
   ['model', 'model'], ['dims', 'dimensions'], ['promptVersion', 'prompt'], ['relevance', 'relevance'],
+  ['characteristics', 'characteristics', v => `${v.coverage} signals · ${v.model} · ${v.promptVersion}`],
 ];
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

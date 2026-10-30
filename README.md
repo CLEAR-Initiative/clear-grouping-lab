@@ -133,6 +133,16 @@ Run these from the lab folder. Swap in the country and date you want.
    ```bash
    python3 replay.py --country sudan --date 2026-10-20 --algo jev-v1 --scope country --tag country
    ```
+   `jev-fields` compares each signal's extracted characteristics
+   (what/where/when/who/scale) with each candidate event's. Run
+   `characterize.py` first to produce them (one cached model call per signal
+   through `OPENROUTER_API_KEY`); `jev-fields` stops if the file is missing.
+   ```bash
+   python3 characterize.py --country sudan --date 2026-10-20
+   ```
+   ```bash
+   python3 replay.py --country sudan --date 2026-10-20 --algo jev-fields
+   ```
    ```bash
    python3 replay.py --country sudan --date 2026-10-20 --algo v2-replay
    ```
@@ -307,9 +317,10 @@ settings and the day's numbers.
 | `v2-gazetteer` | none | `v2-replay`, but a signal that only resolves to a state or the country is first promoted to a district: the first place it names (from `translate.py`, in mention order) that matches exactly one district, or a named point inside one, in its state. Names match on consonant skeletons (Tandilti / Tendelti → `tndlt`). Needs the translations file. | `--type-level 1` keys on the top-level family (conflict) |
 | `naive-state` | none | Key = (state, exact glide code); join the most recent open event in the window with that key. | `--window-hours` |
 | `jev-v1` | Jev | Candidates = open events in the window in the signal's state (plus country-level ones), newest first, each shown as a rule-built summary (place · first title · count and span · latest title). One Jev call asks which event (a Choice over the candidates plus `none`), whether it matches any (yes/no), and whether it is relevant (the production gate). Join the winner when matches-any, the winner's probability and its lead over the runner-up all pass; otherwise new event, keeping candidates above the link threshold as links (`new-linked`). | `--abs-threshold`, `--margin`, `--any-threshold`, `--link-threshold`, `--relevance-threshold`, `--window-hours`, `--max-candidates`, `--scope` |
+| `jev-fields` | Jev | `jev-v1`, but the state also carries each signal's characteristics from `characterize.py` (type, places, actors, occurredAt, scale) and each candidate event's, aggregated from its signals (first real type, all places and actors, earliest occurredAt). The instructions ask for a match on those fields: same type, overlapping places, same occurredAt, same actors where both state them. Same candidates, decision rule and thresholds as `jev-v1`. Needs the characteristics file. | as `jev-v1` |
 | `embed-v1` | Voyage embeddings | Same candidates as `jev-v1`. A candidate scores the cosine similarity between the signal's embedding and its closest member signal (single link). Join the best when it reaches the threshold and beats the runner-up by the margin; otherwise new event, with near misses kept as links. | `--sim-threshold`, `--sim-margin`, `--sim-link-threshold`, `--embed-dims`, `--scope` |
 
-`--scope country` (`jev-v1`, `embed-v1`) offers the state's open events first,
+`--scope country` (`jev-v1`, `jev-fields`, `embed-v1`) offers the state's open events first,
 then every other state's, newest first, up to `--max-candidates`. `--tag` names
 the layer, so one algorithm with different options gives several layers
 (`jev-v1-strict`, `jev-v1-country`, …).
@@ -330,6 +341,7 @@ CLEAR's own relevance verdict, so they drop exactly the signals CLEAR dropped.
 | `jev-v1` | `v2-replay` | Jev's choice over the state's open events | Idea 1, D-0166 as decided |
 | `jev-v1-strict` / `jev-v1-loose` | `jev-v1` | Join thresholds only (winner, margin, matches-any: 0.7/0.25/0.7 and 0.35/0.05/0.3, against 0.5/0.15/0.5) | Where should the near-misses land? Sets V3's thresholds. |
 | `jev-v1-country` | `jev-v1` | Candidates from the whole country: the state's events first, then other states', up to 40 | Do mislocated signals miss their event because it is never offered? |
+| `jev-fields` | `jev-v1` | Jev compares extracted what/where/when/who fields, not only the text and summaries | Does matching on fields stop same-kind-elsewhere merges (one actor's strikes in two towns) without splitting real events? |
 | `embed-v1` | `jev-v1` | Cosine similarity of Voyage embeddings to the closest signal of each candidate, instead of Jev | Is Jev doing more than text similarity? |
 | `embed-v1-matched` | `jev-v1` | `embed-v1` with the threshold lowered to 0.665, where its merge ratio equals `jev-v1`'s | The same question at equal merge levels, so pair precision compares like with like |
 
@@ -377,6 +389,13 @@ event, `memberCountAllDays`; its `signalIds` are that day's only.
 `title`/`text` are null when the original is English; `places` are spelled as
 they appear in the English text.
 
+**Characteristics** `data/<country>/<date>.characteristics.json`: `model`,
+`promptVersion`, `createdAt`, `signals{signalId}` (type, places[], actors[],
+occurredAt, scale) — the grouping-relevant what/where/when/who/scale pulled from
+each signal alone. `type` is "none" for a roundup / analysis / no specific
+occurrence. `replay.py --algo jev-fields` feeds these into its state so
+same-event decisions compare fields, not only prose.
+
 **Geo** `data/<country>/geo.json`: `areas{locationId}` (l level, c centre,
 bb bbox, r outer rings simplified to ~1 km) for the country, states and
 districts; `points{locationId}` ([lon, lat]) for the level-4 places signals
@@ -401,6 +420,7 @@ branchDistrict; `compare` with `--compare`; placeNameAr, arabic, arabicPath with
 | `fetch_day.py` | dev API → day file + `clear-as-run` layer (then runs `fetch_geo.py`) |
 | `fetch_geo.py` | dev API → `geo.json`: outlines and points for the viewer's maps |
 | `translate.py` | day file → English translations + place names per signal (OpenRouter) |
+| `characterize.py` | day file → per-signal characteristics (type, places, actors, occurredAt, scale) for the `jev-fields` layer (OpenRouter) |
 | `replay.py` | day file → candidate layers (see [Layers](#layers)) |
 | `glide_taxonomy.json` | glide code → type family (level 1 and 2), copied from clear-pipeline's `event_categories.json` for the `v2-*` layers |
 | `viewer.html` | static judging UI |

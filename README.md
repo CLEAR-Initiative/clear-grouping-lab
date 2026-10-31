@@ -234,7 +234,8 @@ CLEAR stored. Results and method: the Exponential page
 
 It runs clear-pipeline's own code, so unlike the rest of the lab it needs that
 checkout and its environment (Python 3.11 and `uv`), on a `dev` that includes
-the area-checked locator (merged in clear-pipeline #140). It writes nothing to
+the area-checked locator (clear-pipeline #140) and the gazetteer's `within_location_id`
+argument (clear-pipeline #144; the lab's wrappers follow that signature). It writes nothing to
 CLEAR: point creation is replaced by a district lookup in `geo.json`, the
 gazetteer and geocoder cache are only read, and LocationIQ caches locally.
 The location call goes through `OPENROUTER_API_KEY` (Haiku 4.5 by default,
@@ -253,6 +254,22 @@ uv run --project ../clear-pipeline python geo_eval.py --country sudan --from 202
 against Claude's English spelling). The first run needs `--fetch-geonames`,
 which downloads `data/geonames/<CC>.txt` over HTTPS and prints its SHA-256.
 `--limit 20` makes a cheap smoke test.
+
+### Location precision from day files
+
+`precision.py` prints the share of signals at district (admin-2) or finer, per
+source and per day, from fetched day files: the "Location precision" metric in
+Notion (Data Strategy Execution → Metrics). Since 31 Oct clear-api serves the
+production number itself (the admin-only `locationPrecisionMetrics` query,
+ADR-0012, shown on `/metrics`); this script is the frozen per-day cross-check,
+and the paired instrument for a change under test is still `geo_eval.py`.
+```bash
+python3 precision.py --country sudan --from 2026-10-20 --to 2026-10-29
+python3 precision.py --country sudan --from 2026-10-20 --to 2026-10-29 --json data/location-precision/sudan-1020-1029.json
+```
+Day files only hold signals that have a location (`fetch_day.py` walks the
+country's locations), so signals that were never placed are invisible here;
+the API query counts them under "no location".
 
 ### Rules that keep the data safe
 
@@ -409,6 +426,7 @@ branchDistrict; `compare` with `--compare`; placeNameAr, arabic, arabicPath with
 | `make_pack.py` | day + layers → one self-contained `packs/<country>-<date>.html` for judges |
 | `score.py` | layers × judgments → metrics |
 | `geo_eval.py` | days → dry run of clear-pipeline's location step for one source (runs under clear-pipeline's environment) |
+| `precision.py` | days → share of signals at district or finer per source and day (the Location precision metric; cross-check of clear-api's query) |
 | `seed/` | the week's audit: labelled events, scored alerts, reports, old prototype UI |
 | `data/ layers/ judgments/ packs/` | generated, gitignored |
 

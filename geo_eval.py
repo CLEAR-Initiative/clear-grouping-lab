@@ -220,7 +220,7 @@ def memo(key, fetch):
     return value
 
 
-def gazetteer(name, *, country_code=None, min_similarity=None):
+def gazetteer(name, *, country_code=None, min_similarity=None, within_location_id=None):
     return memo(("gaz", name, country_code, min_similarity), lambda: lc.graphql(
         GAZETTEER_QUERY, {"name": name, "cc": country_code, "min": min_similarity},
     ).get("resolveGazetteerLocation"))
@@ -381,8 +381,9 @@ def traced_resolve(*a, **kw):
     return result
 
 
-def traced_gazetteer_tier(top, expected):
-    hit = real_gazetteer_tier(top, expected)
+def traced_gazetteer_tier(top, expected, within_location_id=None):
+    # clear-pipeline #144 added `within_location_id` (the gazetteer chooses by area).
+    hit = real_gazetteer_tier(top, expected, within_location_id)
     tls.trace["gazetteer_hit"] = None if hit is None else {
         "name": hit.display_name, "lat": hit.lat, "lng": hit.lng, "score": hit.importance}
     return hit
